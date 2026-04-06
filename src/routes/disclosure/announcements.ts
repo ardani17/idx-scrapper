@@ -14,6 +14,29 @@ const errResponses = {
   503: { $ref: '#/components/responses/ServiceUnavailable' },
 };
 
+// ── Date Filter Helper ─────────────────────
+function parseIdxDate(dateStr: string): Date | null {
+  const months: Record<string, string> = {
+    'Januari':'01','Februari':'02','Maret':'03','April':'04','Mei':'05','Juni':'06',
+    'Juli':'07','Agustus':'08','September':'09','Oktober':'10','November':'11','Desember':'12'
+  };
+  const m = dateStr.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+  if (m && months[m[2]]) return new Date(`${m[3]}-${months[m[2]]}-${m[1].padStart(2,'0')}`);
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function filterByDate(items: any[], dateFrom?: string, dateTo?: string) {
+  if (!dateFrom && !dateTo) return items;
+  return items.filter(item => {
+    const d = parseIdxDate(item.date);
+    if (!d) return true;
+    if (dateFrom && d < new Date(dateFrom)) return false;
+    if (dateTo && d > new Date(dateTo + 'T23:59:59')) return false;
+    return true;
+  });
+}
+
 export function announcementsRoutes(
   disclosure: DisclosureClient,
   downloader: FileDownloader,
@@ -48,7 +71,7 @@ export function announcementsRoutes(
 
     // ── Berita Pengumuman ────────────────────────
     .get('/berita-pengumuman', async ({ query }) => {
-      const cacheKey = `/berita-pengumuman-${query.limit || 20}-${query.page || 1}-${query.keywords || ''}`;
+      const cacheKey = `/berita-pengumuman-${query.limit || 20}-${query.page || 1}-${query.keywords || ''}-${query.dateFrom || ''}-${query.dateTo || ''}`;
       const cached = newsCache.get(cacheKey);
       if (cached) return { ...cached, _cached: true };
 
@@ -56,13 +79,14 @@ export function announcementsRoutes(
         query.limit, query.page, query.keywords,
       );
 
-      const enriched = enrichAnnouncementFiles(result.items);
+      let enriched = enrichAnnouncementFiles(result.items);
+      enriched = filterByDate(enriched, query.dateFrom, query.dateTo);
 
       const response = {
         success: true,
         data: enriched,
-        total: result.totalCount,
-        page: result.page,
+        total: enriched.length,
+        page: query.page || 1,
         pageSize: result.pageSize,
         fetchedAt: new Date().toISOString(),
         _source: 'https://www.idx.co.id/id/berita/pengumuman/',
@@ -75,19 +99,23 @@ export function announcementsRoutes(
         limit: t.Optional(t.Numeric({ default: 20, minimum: 1, maximum: 200 })),
         page: t.Optional(t.Numeric({ default: 1, minimum: 1 })),
         keywords: t.Optional(t.String({ default: '' })),
+        dateFrom: t.Optional(t.String({ default: '' })),
+        dateTo: t.Optional(t.String({ default: '' })),
       }),
       detail: {
         tags: ['Disclosure'],
         summary: 'Berita Pengumuman (IDX news)',
-        description: 'IDX disclosure announcements in Indonesian. Supports keyword search and pagination.',
+        description: 'IDX disclosure announcements in Indonesian. Supports keyword search, pagination, and date filtering.',
         security,
         parameters: [
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, minimum: 1, maximum: 200 }, description: 'Items per page' },
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 }, description: 'Page number' },
           { name: 'keywords', in: 'query', schema: { type: 'string', default: '' }, description: 'Search keyword filter' },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', description: 'Filter from date (YYYY-MM-DD)' } },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', description: 'Filter to date (YYYY-MM-DD)' } },
         ],
         responses: {
-          200: { description: 'Announcement list', content: { 'application/json': { example: { success: true, data: [{ title: 'Pengumuman RUPS', date: '2025-01-01', stockCode: 'BBRI', files: [] }], total: 100, page: 1, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
+          200: { description: 'Announcement list' },
           ...errResponses,
         },
       },
@@ -95,18 +123,19 @@ export function announcementsRoutes(
 
     // ── Announcements (Pengumuman) ───────────────
     .get('/announcements', async ({ query }) => {
-      const cacheKey = `/announcements-${query.limit || 50}-${query.download || 'false'}`;
+      const cacheKey = `/announcements-${query.limit || 50}-${query.download || 'false'}-${query.dateFrom || ''}-${query.dateTo || ''}`;
       const cached = newsCache.get(cacheKey);
       if (cached) return { ...cached, _cached: true };
 
       const data = await disclosure.getAnnouncements(query.limit);
-      const enriched = enrichAnnouncementFiles(data).map(ann => ({
+      let enriched = enrichAnnouncementFiles(data).map(ann => ({
         ...ann,
         _links: {
           self: '/api/disclosure/announcements',
           downloadTrigger: `/api/disclosure/announcements?download=true&limit=${query.limit || 50}`,
         },
       }));
+      enriched = filterByDate(enriched, query.dateFrom, query.dateTo);
 
       if (query.download !== 'true') {
         const response = {
@@ -146,19 +175,23 @@ export function announcementsRoutes(
         limit: t.Optional(t.Numeric({ default: 50, minimum: 1, maximum: 200 })),
         download: t.Optional(t.String({ default: 'false' })),
         downloadLimit: t.Optional(t.Numeric({ default: 3, minimum: 1, maximum: 20 })),
+        dateFrom: t.Optional(t.String({ default: '' })),
+        dateTo: t.Optional(t.String({ default: '' })),
       }),
       detail: {
         tags: ['Disclosure'],
         summary: 'Announcements (with download)',
-        description: 'Latest IDX disclosures/announcements. Set download=true to trigger file downloads to server storage.',
+        description: 'Latest IDX disclosures/announcements. Supports date filtering and optional file download.',
         security,
         parameters: [
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, minimum: 1, maximum: 200 }, description: 'Number of announcements to fetch' },
           { name: 'download', in: 'query', schema: { type: 'string', default: 'false', enum: ['true', 'false'] }, description: 'Set to "true" to auto-download attachments' },
           { name: 'downloadLimit', in: 'query', schema: { type: 'integer', default: 3, minimum: 1, maximum: 20 }, description: 'Max items to download when download=true' },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', description: 'Filter from date (YYYY-MM-DD)' } },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', description: 'Filter to date (YYYY-MM-DD)' } },
         ],
         responses: {
-          200: { description: 'Announcements list', content: { 'application/json': { example: { success: true, data: [{ title: 'Laporan Keuangan', date: '2025-01-01', stockCode: 'TLKM', files: [{ name: 'report.pdf', url: '...' }] }], total: 50, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
+          200: { description: 'Announcements list' },
           ...errResponses,
         },
       },

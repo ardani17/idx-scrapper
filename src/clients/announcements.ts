@@ -38,15 +38,15 @@ export function formatPublishDate(isoDate: string): { date: string; time: string
 
 // ── API Response Mapping ────────────────────────
 /** Map IDX API raw item → Announcement interface */
-function mapApiItem(item: any, urlField: 'PdfUrl' | 'FullSavePath' = 'PdfUrl'): Announcement {
+function mapApiItem(item: any, urlField: 'PdfUrl' | 'FullSavePath' = 'FullSavePath'): Announcement {
   const { date, time } = formatPublishDate(item.PublishDate || '');
   return {
     date, time,
     title: item.Title || '',
     stockCode: (item.Code || null)?.trim() || null,
     files: (item.Attachments || []).map((att: any) => ({
-      name: att.PDFFilename || att.FullNamePDF || 'file.pdf',
-      url: att[urlField] || att.PdfUrl || '',
+      name: att.OriginalFilename || att.PDFFilename || att.FullNamePDF || 'file.pdf',
+      url: att.FullSavePath || att.PdfUrl || att[urlField] || '',
     })),
   };
 }
@@ -77,7 +77,7 @@ export class AnnouncementsClient {
       params,
     });
 
-    const items = (raw.Items || []).map((item: any) => mapApiItem(item));
+    const items = (raw.Items || []).map((item: any) => mapApiItem(item, 'FullSavePath'));
     console.log(`[Announcements] API returned ${items.length} items`);
     return items.slice(0, limit);
   }
