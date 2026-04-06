@@ -22,7 +22,7 @@ export function disclosureRoutes(
   stateFile: string,
 ) {
   return new Elysia({ prefix: '/disclosure' })
-    .use(announcementsRoutes(disclosure, downloader))
+    .use(announcementsRoutes(disclosure))
     .use(financialReportsRoutes(disclosure, downloader))
     .use(monitorRoutes(disclosure, downloader, stateFile));
 }

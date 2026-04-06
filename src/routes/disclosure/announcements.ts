@@ -3,7 +3,6 @@
 
 import { Elysia, t } from 'elysia';
 import type { DisclosureClient } from '../../clients/disclosure-client';
-import type { FileDownloader } from '../../downloaders/file-downloader';
 import { enrichAnnouncementFiles } from '../../utils/response';
 import { newsCache } from '../../utils/cache';
 
@@ -39,7 +38,6 @@ function filterByDate(items: any[], dateFrom?: string, dateTo?: string) {
 
 export function announcementsRoutes(
   disclosure: DisclosureClient,
-  downloader: FileDownloader,
 ) {
   return new Elysia()
 
@@ -123,70 +121,36 @@ export function announcementsRoutes(
 
     // ── Announcements (Pengumuman) ───────────────
     .get('/announcements', async ({ query }) => {
-      const cacheKey = `/announcements-${query.limit || 50}-${query.download || 'false'}-${query.dateFrom || ''}-${query.dateTo || ''}`;
+      const cacheKey = `/announcements-${query.limit || 50}-${query.dateFrom || ''}-${query.dateTo || ''}`;
       const cached = newsCache.get(cacheKey);
       if (cached) return { ...cached, _cached: true };
 
       const data = await disclosure.getAnnouncements(query.limit);
-      let enriched = enrichAnnouncementFiles(data).map(ann => ({
-        ...ann,
-        _links: {
-          self: '/api/disclosure/announcements',
-          downloadTrigger: `/api/disclosure/announcements?download=true&limit=${query.limit || 50}`,
-        },
-      }));
+      let enriched = enrichAnnouncementFiles(data);
       enriched = filterByDate(enriched, query.dateFrom, query.dateTo);
-
-      if (query.download !== 'true') {
-        const response = {
-          success: true,
-          data: enriched,
-          total: enriched.length,
-          fetchedAt: new Date().toISOString(),
-          _cached: false,
-        };
-        newsCache.set(cacheKey, response);
-        return response;
-      }
-
-      const downloads = [];
-      for (const ann of data.slice(0, query.downloadLimit)) {
-        if (ann.files.length) {
-          const r = await downloader.downloadFiles(ann.files, ann.date, ann.stockCode);
-          downloads.push({
-            title: ann.title.slice(0, 60),
-            stockCode: ann.stockCode,
-            ...r,
-          });
-        }
-      }
 
       const response = {
         success: true,
         data: enriched,
         total: enriched.length,
         fetchedAt: new Date().toISOString(),
-        downloads,
         _cached: false,
       };
+      newsCache.set(cacheKey, response);
       return response;
     }, {
       query: t.Object({
         limit: t.Optional(t.Numeric({ default: 50, minimum: 1, maximum: 200 })),
-        download: t.Optional(t.String({ default: 'false' })),
-        downloadLimit: t.Optional(t.Numeric({ default: 3, minimum: 1, maximum: 20 })),
         dateFrom: t.Optional(t.String({ default: '' })),
         dateTo: t.Optional(t.String({ default: '' })),
       }),
       detail: {
         tags: ['Disclosure'],
-        summary: 'Announcements (with download)',
-        description: 'Latest IDX disclosures/announcements. Supports date filtering and optional file download.',
+        summary: 'Announcements (data only)',
+        description: 'Latest IDX disclosures/announcements. Data fetch only, no file download.',
         security,
         parameters: [
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, minimum: 1, maximum: 200 }, description: 'Number of announcements to fetch' },
-          { name: 'download', in: 'query', schema: { type: 'string', default: 'false', enum: ['true', 'false'] }, description: 'Set to "true" to auto-download attachments' },
-          { name: 'downloadLimit', in: 'query', schema: { type: 'integer', default: 3, minimum: 1, maximum: 20 }, description: 'Max items to download when download=true' },
           { name: 'dateFrom', in: 'query', schema: { type: 'string', description: 'Filter from date (YYYY-MM-DD)' } },
           { name: 'dateTo', in: 'query', schema: { type: 'string', description: 'Filter to date (YYYY-MM-DD)' } },
         ],
