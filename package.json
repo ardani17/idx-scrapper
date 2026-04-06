@@ -1,0 +1,17 @@
+{
+  "name": "idx-scraper",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@elysiajs/static": "^1.4.7",
+    "elysia": "^1.4.28",
+    "playwright": "^1.59.1"
+  }
+}

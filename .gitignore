@@ -1,0 +1,11 @@
+node_modules/
+data/
+out/
+dist/
+*.tgz
+.env
+.env.*
+!.env.example
+.ocr_cache/
+*.json.bak
+test-output/
