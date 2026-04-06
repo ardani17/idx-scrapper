@@ -190,7 +190,13 @@ export class FileDownloader {
   // ── Helpers ────────────────────────────────────
 
   resolvePath(relativePath: string): string {
-    return join(this.storageDir, relativePath);
+    const resolved = join(this.storageDir, relativePath);
+    const normalized = (resolved + '/').replace(/\\/g, '/');
+    const base = (this.storageDir + '/').replace(/\\/g, '/');
+    if (!normalized.startsWith(base)) {
+      throw new Error('Path traversal detected');
+    }
+    return resolved;
   }
 
   getStorageDir(): string {

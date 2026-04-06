@@ -44,11 +44,15 @@ export function announcementsRoutes(
     // ── Redirect ke file asli IDX ─────────────────
     .get('/redirect', ({ query, set }) => {
       const url = decodeURIComponent(query.url || '');
-      if (!url || !url.includes('idx.co.id')) {
-        return { success: false, message: 'URL tidak valid. Harus mengandung idx.co.id' };
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname !== 'www.idx.co.id' && parsed.hostname !== 'idx.co.id') {
+          return { success: false, message: 'URL harus mengarah ke idx.co.id' };
+        }
+        return new Response(null, { status: 302, headers: { Location: url } });
+      } catch {
+        return { success: false, message: 'URL tidak valid' };
       }
-      set.redirect = url;
-      return { success: true, redirectingTo: url };
     }, {
       query: t.Object({ url: t.String() }),
       detail: {

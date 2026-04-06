@@ -99,8 +99,10 @@ const app = new Elysia({ prefix: '/api' })
 
   // ── CORS ──────────────────────────────────────
   .onTransform(({ request, set }) => {
+    const ALLOWED_ORIGINS = ['https://cloudnexify.com', 'https://idx.cloudnexify.com', 'https://app.cloudnexify.com'];
     const origin = request.headers.get('origin');
-    set.headers['Access-Control-Allow-Origin'] = origin || '*';
+    set.headers['Access-Control-Allow-Origin'] = (origin && ALLOWED_ORIGINS.includes(origin)) ? origin : 'https://idx.cloudnexify.com';
+    set.headers['Vary'] = 'Origin';
     set.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS';
     set.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-API-Key, X-Admin-Key';
     set.headers['Access-Control-Max-Age'] = '86400';

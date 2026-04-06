@@ -7,10 +7,17 @@ import { MIME_TYPES } from '../types';
 import { formatBytes } from '../utils/format';
 
 const security = [{ ApiKeyAuth: [] }];
+const securityAdmin = [{ AdminKeyAuth: [] }];
 const errResponses = {
   401: { $ref: '#/components/responses/Unauthorized' },
   429: { $ref: '#/components/responses/RateLimited' },
 };
+
+const ADMIN_KEY = process.env.ADMIN_API_KEY || 'admin-secret';
+function isAdmin(request: Request): boolean {
+  const key = request.headers.get('x-admin-key') || request.headers.get('authorization')?.replace('Bearer ', '');
+  return key === ADMIN_KEY;
+}
 
 export function fileRoutes(downloader: FileDownloader) {
   return new Elysia({ prefix: '/disclosure' })
@@ -69,12 +76,24 @@ export function fileRoutes(downloader: FileDownloader) {
       },
     })
 
-    .delete('/file', async ({ query }) => {
-      const fullPath = downloader.resolvePath(decodeURIComponent(query.path));
-      const stat = await fs.stat(fullPath);
-      if (stat.isDirectory()) await fs.rm(fullPath, { recursive: true });
-      else await fs.unlink(fullPath);
-      return { success: true, message: `Deleted: ${query.path}` };
+    .delete('/file', async ({ query, request, set }) => {
+      if (!isAdmin(request)) {
+        set.status = 401;
+        return { success: false, error: 'Admin key required', statusCode: 401 };
+      }
+      try {
+        const fullPath = downloader.resolvePath(decodeURIComponent(query.path));
+        const stat = await fs.stat(fullPath);
+        if (stat.isDirectory()) await fs.rm(fullPath, { recursive: true });
+        else await fs.unlink(fullPath);
+        return { success: true, message: `Deleted: ${query.path}` };
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        if (msg.includes('traversal') || msg.includes('ENOENT')) {
+          return { success: false, error: msg, statusCode: 400 };
+        }
+        throw err;
+      }
     }, {
       query: t.Object({ path: t.String() }),
       detail: {
