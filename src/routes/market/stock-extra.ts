@@ -47,7 +47,7 @@ export function stockExtraRoutes(
         summary: 'Margin & short selling stocks',
         description: 'List of stocks eligible for margin trading and short selling on IDX.',
         security,
-        response: {
+        responses: {
           200: { description: 'Margin eligible stocks', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BBRI', marginRate: 50, shortSell: true }], total: 100, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -78,7 +78,7 @@ export function stockExtraRoutes(
         summary: 'Pre-opening stocks',
         description: 'Stock prices during pre-opening session (09:00–09:05 WIB).',
         security,
-        response: {
+        responses: {
           200: { description: 'Pre-opening price data', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BBRI', preOpenPrice: 5400 }], total: 100, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -109,7 +109,7 @@ export function stockExtraRoutes(
         summary: 'Liquidity provider stocks',
         description: 'List of stocks with designated liquidity providers to ensure market depth.',
         security,
-        response: {
+        responses: {
           200: { description: 'LP stocks data', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BBRI', lpName: 'Securities Firm X' }], total: 50, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },

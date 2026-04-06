@@ -27,7 +27,7 @@ export function fileRoutes(downloader: FileDownloader) {
         parameters: [
           { name: 'folder', in: 'query', schema: { type: 'string', default: '' }, description: 'Subfolder to browse (e.g. stock code)' },
         ],
-        response: {
+        responses: {
           200: { description: 'File listing', content: { 'application/json': { example: { success: true, files: [{ name: 'report.pdf', size: 1024000, modified: '2025-01-01T00:00:00.000Z' }], totalFiles: 10, totalSize: 50000000, totalSizeFormatted: '50 MB' } } } },
           ...errResponses,
         },
@@ -61,7 +61,7 @@ export function fileRoutes(downloader: FileDownloader) {
         parameters: [
           { name: 'path', in: 'query', required: true, schema: { type: 'string' }, description: 'Relative file path within the disclosure storage' },
         ],
-        response: {
+        responses: {
           200: { description: 'File content (binary)' },
           404: { description: 'File not found' },
           ...errResponses,
@@ -85,7 +85,7 @@ export function fileRoutes(downloader: FileDownloader) {
         parameters: [
           { name: 'path', in: 'query', required: true, schema: { type: 'string' }, description: 'Relative path to delete' },
         ],
-        response: {
+        responses: {
           200: { description: 'File deleted', content: { 'application/json': { example: { success: true, message: 'Deleted: folder/file.pdf' } } } },
           ...errResponses,
         },

@@ -45,7 +45,7 @@ export function otherRoutes() {
         summary: 'IDX market statistics',
         description: 'Key market statistics — market capitalization, number of listed companies, trading volume/value summaries.',
         security,
-        response: {
+        responses: {
           200: { description: 'Market statistics', content: { 'application/json': { example: { success: true, data: [{ metric: 'Market Cap', value: '10,500 T' }, { metric: 'Listed Companies', value: 900 }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -71,7 +71,7 @@ export function otherRoutes() {
         summary: 'New listings / IPO',
         description: 'Recently listed companies and upcoming IPO information on IDX.',
         security,
-        response: {
+        responses: {
           200: { description: 'New listings', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'XYZ', stockName: 'PT XYZ Indonesia', listingDate: '2025-01-15', ipoPrice: 500 }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -97,7 +97,7 @@ export function otherRoutes() {
         summary: 'LQ45 fact sheet',
         description: 'LQ45 index fact sheet — constituent stocks, weights, and index performance data.',
         security,
-        response: {
+        responses: {
           200: { description: 'LQ45 fact sheet', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BBRI', weight: 12.5, sector: 'Finance' }], total: 45, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -123,7 +123,7 @@ export function otherRoutes() {
         summary: 'Bond order book',
         description: 'Bond order book summary — bid/ask data for listed bonds and sukuk.',
         security,
-        response: {
+        responses: {
           200: { description: 'Bond order book', content: { 'application/json': { example: { success: true, data: [{ bondCode: 'BRIS01', bidPrice: 101.5, askPrice: 102.0, volume: 5000 }], total: 20, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },

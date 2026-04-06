@@ -9,6 +9,13 @@ import { enrichFinancialReportAttachments } from '../../utils/response';
 import { REPORT_TYPE_NAMES } from '../../types';
 import { newsCache } from '../../utils/cache';
 
+const security = [{ ApiKeyAuth: [] }];
+const errResponses = {
+  401: { $ref: '#/components/responses/Unauthorized' },
+  429: { $ref: '#/components/responses/RateLimited' },
+  503: { $ref: '#/components/responses/ServiceUnavailable' },
+};
+
 export function financialReportsRoutes(
   disclosure: DisclosureClient,
   downloader: FileDownloader,
@@ -45,7 +52,6 @@ export function financialReportsRoutes(
         return response;
       }
 
-      // Download lampiran ke server
       const downloads = [];
       for (const r of results.slice(0, query.downloadLimit)) {
         if (r.attachments.length) {
@@ -82,6 +88,24 @@ export function financialReportsRoutes(
         download: t.Optional(t.String({ default: 'false' })),
         downloadLimit: t.Optional(t.Numeric({ default: 3, minimum: 1, maximum: 20 })),
       }),
+      detail: {
+        tags: ['Disclosure'],
+        summary: 'Financial reports',
+        description: 'Corporate financial reports (annual ra, quarterly rdf, quarterly rq). Filter by stock code, year, or report type. Set download=true to auto-download attachments.',
+        security,
+        parameters: [
+          { name: 'reportType', in: 'query', schema: { type: 'string', default: 'ra', enum: ['ra', 'rdf', 'rq'] }, description: 'Report type: ra=Annual, rdf=Quarterly Financial, rq=Quarterly' },
+          { name: 'year', in: 'query', schema: { type: 'integer', default: 2025 }, description: 'Report year' },
+          { name: 'kodeEmiten', in: 'query', schema: { type: 'string', default: '' }, description: 'Stock code filter (e.g. BBRI, TLKM)' },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 50, minimum: 1, maximum: 500 }, description: 'Items per page' },
+          { name: 'download', in: 'query', schema: { type: 'string', default: 'false', enum: ['true', 'false'] }, description: 'Set to "true" to auto-download attachments' },
+          { name: 'downloadLimit', in: 'query', schema: { type: 'integer', default: 3, minimum: 1, maximum: 20 }, description: 'Max items to download' },
+        ],
+        responses: {
+          200: { description: 'Financial reports', content: { 'application/json': { example: { success: true, data: [{ kodeEmiten: 'BBRI', namaEmiten: 'Bank Rakyat Indonesia', reportType: 'ra', reportYear: 2024, endPeriode: '2024-12-31', attachments: [{ fileName: 'annual-report.pdf' }] }], total: 100, reportType: 'ra', year: 2025, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
+          ...errResponses,
+        },
+      },
     })
 
     // ── Manual download trigger ──────────────────
@@ -98,5 +122,16 @@ export function financialReportsRoutes(
         stockCode: t.Optional(t.String()),
         files: t.Array(t.Object({ name: t.String(), url: t.String() })),
       }),
+      detail: {
+        tags: ['Disclosure'],
+        summary: 'Manual file download',
+        description: 'Manually trigger download of disclosure files to server storage. Provide file URLs and metadata.',
+        security,
+        responses: {
+          200: { description: 'Download initiated', content: { 'application/json': { example: { success: true, downloaded: 2, failed: 0, totalSize: 5000000 } } } },
+          400: { description: 'No files provided' },
+          ...errResponses,
+        },
+      },
     });
 }

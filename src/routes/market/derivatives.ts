@@ -40,7 +40,7 @@ export function derivativesRoutes(derivatives: DerivativesClient, etf: EtfClient
         summary: 'Derivatives summary',
         description: 'Summary of derivatives products on IDX including options, warrants, and futures.',
         security,
-        response: {
+        responses: {
           200: { description: 'Derivatives data', content: { 'application/json': { example: { success: true, data: [{ contractCode: 'IHSG-C', underlying: 'IHSG', lastPrice: 7205, volume: 15000 }], total: 20, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -69,7 +69,7 @@ export function derivativesRoutes(derivatives: DerivativesClient, etf: EtfClient
         summary: 'ETF list',
         description: 'List of all Exchange Traded Funds (ETF) listed on IDX with current price and NAV.',
         security,
-        response: {
+        responses: {
           200: { description: 'ETF list', content: { 'application/json': { example: { success: true, data: [{ etfCode: 'XLLF', etfName: 'BNI-AM LQ45', lastPrice: 1050, nav: 1048 }], total: 30, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -98,7 +98,7 @@ export function derivativesRoutes(derivatives: DerivativesClient, etf: EtfClient
         summary: 'ETF iNAV',
         description: 'Indicative Net Asset Value (iNAV) for ETFs — real-time estimated NAV during trading hours.',
         security,
-        response: {
+        responses: {
           200: { description: 'ETF iNAV data', content: { 'application/json': { example: { success: true, data: [{ etfCode: 'XLLF', inav: 1049.5, lastUpdate: '2025-01-01T09:30:00.000Z' }], total: 30, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },

@@ -54,7 +54,7 @@ export function newsRoutes(
         summary: 'IDX news',
         description: 'Latest IDX news and announcements.',
         security,
-        response: {
+        responses: {
           200: { description: 'News list', content: { 'application/json': { example: { success: true, data: [{ title: 'IDX Trading Update', date: '2025-01-01', url: 'https://www.idx.co.id/...' }], total: 20, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -79,7 +79,7 @@ export function newsRoutes(
         summary: 'Press releases',
         description: 'Official IDX press releases.',
         security,
-        response: {
+        responses: {
           200: { description: 'Press releases', content: { 'application/json': { example: { success: true, data: [{ title: 'IDX Press Release', date: '2025-01-01' }], total: 15, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -104,7 +104,7 @@ export function newsRoutes(
         summary: 'IDX articles',
         description: 'Articles and market insights published by IDX.',
         security,
-        response: {
+        responses: {
           200: { description: 'Articles', content: { 'application/json': { example: { success: true, data: [{ title: 'Market Review', date: '2025-01-01' }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -129,7 +129,7 @@ export function newsRoutes(
         summary: 'UMA (Unusual Market Activity)',
         description: 'Unusual Market Activity reports — stocks flagged for suspicious trading patterns.',
         security,
-        response: {
+        responses: {
           200: { description: 'UMA reports', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'ABC', reportDate: '2025-01-01', description: 'UOA detected' }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -154,7 +154,7 @@ export function newsRoutes(
         summary: 'Stock suspensions',
         description: 'Recent stock suspension notices from IDX.',
         security,
-        response: {
+        responses: {
           200: { description: 'Suspension notices', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'XYZ', suspensionDate: '2025-01-01', reason: 'Permintaan Emiten' }], total: 5, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -179,7 +179,7 @@ export function newsRoutes(
         summary: 'ETD news',
         description: 'Exchange Traded Derivatives news and updates.',
         security,
-        response: {
+        responses: {
           200: { description: 'ETD news', content: { 'application/json': { example: { success: true, data: [{ title: 'ETD Update', date: '2025-01-01' }], total: 5, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -204,7 +204,7 @@ export function newsRoutes(
         summary: 'TD (Trading Derivative) news',
         description: 'Trading Derivative product news and notices.',
         security,
-        response: {
+        responses: {
           200: { description: 'TD news', content: { 'application/json': { example: { success: true, data: [{ title: 'TD Notice', date: '2025-01-01' }], total: 5, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -229,7 +229,7 @@ export function newsRoutes(
         summary: 'Trading holidays',
         description: 'IDX trading holiday calendar — dates when the exchange is closed.',
         security,
-        response: {
+        responses: {
           200: { description: 'Trading holidays', content: { 'application/json': { example: { success: true, data: [{ date: '2025-01-01', description: 'Tahun Baru' }, { date: '2025-03-29', description: 'Hari Raya Nyepi' }], total: 15, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },

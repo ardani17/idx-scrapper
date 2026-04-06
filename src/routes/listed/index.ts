@@ -42,7 +42,7 @@ export function listedRoutes(
         summary: 'Corporate actions',
         description: 'Upcoming and recent corporate actions including dividends, stock splits, rights issues, and bonus shares.',
         security,
-        response: {
+        responses: {
           200: { description: 'Corporate action list', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BBRI', action: 'Dividen', exDate: '2025-03-15', recordDate: '2025-03-17' }], total: 50, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -67,7 +67,7 @@ export function listedRoutes(
         summary: 'Corporate calendar',
         description: 'Upcoming corporate events calendar — AGM, EGM, dividend dates, financial report deadlines.',
         security,
-        response: {
+        responses: {
           200: { description: 'Corporate calendar', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'TLKM', event: 'RUPS', date: '2025-04-20' }], total: 100, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -92,7 +92,7 @@ export function listedRoutes(
         summary: 'Special notation (watchlist)',
         description: 'Stocks under special notation/watchlist by IDX — unusual trading activity, regulatory concerns, etc.',
         security,
-        response: {
+        responses: {
           200: { description: 'Special notation stocks', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'XYZ', notation: 'TP', reason: 'Suspicious trading' }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -117,7 +117,7 @@ export function listedRoutes(
         summary: 'Watchlist stocks',
         description: 'IDX-monitored watchlist stocks with unusual price movements or high volatility.',
         security,
-        response: {
+        responses: {
           200: { description: 'Watchlist data', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'ABC', lastPrice: 500, changePct: 25, reason: 'UOA' }], total: 15, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -142,7 +142,7 @@ export function listedRoutes(
         summary: 'ESG rating',
         description: 'Environmental, Social, and Governance (ESG) ratings for IDX-listed companies.',
         security,
-        response: {
+        responses: {
           200: { description: 'ESG ratings', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BBRI', overallScore: 85, environmentalScore: 80, socialScore: 88, governanceScore: 87 }], total: 50, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },

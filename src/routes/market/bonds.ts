@@ -42,7 +42,7 @@ export function bondsRoutes(
         summary: 'Bond & sukuk summary',
         description: 'Summary of active bonds and sukuk listed on IDX including yield, coupon rate, and maturity.',
         security,
-        response: {
+        responses: {
           200: { description: 'Bond summary data', content: { 'application/json': { example: { success: true, data: [{ bondCode: 'BRIS01', issuer: 'Bank BRISyariah', coupon: 6.5, maturity: '2028-12-15' }], total: 50, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -72,7 +72,7 @@ export function bondsRoutes(
         summary: 'INDOBEX (Bond Index)',
         description: 'Indonesia Bond Index (INDOBEX) data — benchmark bond indices published by IDX.',
         security,
-        response: {
+        responses: {
           200: { description: 'INDOBEX data', content: { 'application/json': { example: { success: true, data: [{ indexName: 'INDOBEX Government', value: 150.5, change: 0.3 }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },

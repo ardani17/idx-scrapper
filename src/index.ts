@@ -93,6 +93,10 @@ const app = new Elysia({ prefix: '/api' })
     exclude: ['/health'],
   }))
 
+  // ── Swagger alias routes (/swagger → /docs) ──
+  .get('/swagger', ({ set }) => { set.redirect = '/api/docs'; return ''; })
+  .get('/swagger/json', ({ set }) => { set.redirect = '/api/docs/json'; return ''; })
+
   // ── CORS ──────────────────────────────────────
   .onTransform(({ request, set }) => {
     const origin = request.headers.get('origin');
@@ -121,7 +125,12 @@ const app = new Elysia({ prefix: '/api' })
     if (path.includes('/admin')) return;
 
     // 3. All other routes → validate API key + rate limits
-    const providedKey = request.headers.get('X-API-Key');
+    let providedKey = request.headers.get('X-API-Key');
+    // Swagger UI may send as Bearer token
+    if (!providedKey) {
+      const auth = request.headers.get('Authorization');
+      if (auth?.startsWith('Bearer ')) providedKey = auth.slice(7);
+    }
     const validation = validateKey(providedKey || '');
 
     if (!validation.valid) {

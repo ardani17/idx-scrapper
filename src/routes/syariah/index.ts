@@ -47,7 +47,7 @@ export function syariahRoutes() {
         summary: 'Syariah-compliant stocks',
         description: 'List of all syariah-compliant stocks listed on IDX. These stocks meet Islamic finance criteria.',
         security,
-        response: {
+        responses: {
           200: { description: 'Syariah stock list', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BRIS', stockName: 'Bank BRISyariah', category: 'Islamic Bank' }], total: 400, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -78,7 +78,7 @@ export function syariahRoutes() {
         summary: 'Syariah indices',
         description: 'IDX syariah indices — JII (Jakarta Islamic Index), ISSI, and other Islamic-compliant indices.',
         security,
-        response: {
+        responses: {
           200: { description: 'Syariah index data', content: { 'application/json': { example: { success: true, data: [{ index: 'JII', value: 520.3, change: 5.2, changePct: 1.01 }], total: 5, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -109,7 +109,7 @@ export function syariahRoutes() {
         summary: 'Syariah transaction data',
         description: 'Trading volume and value for syariah-compliant securities.',
         security,
-        response: {
+        responses: {
           200: { description: 'Syariah transaction data', content: { 'application/json': { example: { success: true, data: [{ date: '2025-01-01', volume: 5000000000, value: 3000000000000 }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },

@@ -44,7 +44,7 @@ export function membersRoutes() {
         summary: 'Exchange members (brokers)',
         description: 'List of all registered securities firms (brokers) that are members of IDX.',
         security,
-        response: {
+        responses: {
           200: { description: 'Broker list', content: { 'application/json': { example: { success: true, data: [{ brokerCode: 'YP', brokerName: 'Mirae Asset Sekuritas', address: 'Jakarta', status: 'Active' }], total: 100, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -75,7 +75,7 @@ export function membersRoutes() {
         summary: 'Exchange participants',
         description: 'List of all exchange participants including custodians, administrators, and other participants.',
         security,
-        response: {
+        responses: {
           200: { description: 'Participant list', content: { 'application/json': { example: { success: true, data: [{ participantCode: 'KP', participantName: 'Kustodian Sentral Efek Indonesia', type: 'KSEI' }], total: 50, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },

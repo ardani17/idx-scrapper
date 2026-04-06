@@ -39,7 +39,7 @@ export function tradingRoutes(
         summary: 'Trading summary',
         description: 'Daily trading summary including total transactions, volume, value, and frequency across all boards (regular, negotiation, cash).',
         security: [{ ApiKeyAuth: [] }],
-        response: {
+        responses: {
           200: { description: 'Trading summary data', content: { 'application/json': { example: { success: true, data: [{ board: 'RG', totalTransaction: 350000 }], fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           401: { $ref: '#/components/responses/Unauthorized' },
           429: { $ref: '#/components/responses/RateLimited' },
@@ -74,7 +74,7 @@ export function tradingRoutes(
         summary: 'Broker summary',
         description: 'Top broker rankings by transaction value and frequency. Shows buying/selling activity per securities firm.',
         security: [{ ApiKeyAuth: [] }],
-        response: {
+        responses: {
           200: { description: 'Broker summary data', content: { 'application/json': { example: { success: true, data: [{ brokerCode: 'YP', brokerName: 'Mirae Asset', totalValue: 500000000000 }], fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           401: { $ref: '#/components/responses/Unauthorized' },
           429: { $ref: '#/components/responses/RateLimited' },

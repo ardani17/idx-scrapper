@@ -44,7 +44,7 @@ export function idxRoutes(client: IDXClient) {
           { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10 }, description: 'Number of items per page' },
           { name: 'indexFrom', in: 'query', schema: { type: 'integer', default: 0 }, description: 'Starting index for pagination' },
         ],
-        response: {
+        responses: {
           200: { description: 'Relisting data', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'ABC', stockName: 'PT ABC', listingDate: '2024-01-15' }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -80,7 +80,7 @@ export function idxRoutes(client: IDXClient) {
         parameters: [
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 }, description: 'Page number' },
         ],
-        response: {
+        responses: {
           200: { description: 'Emiten list', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BBRI', stockName: 'Bank Rakyat Indonesia', sector: 'Finance' }], total: 50, page: 1, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
@@ -120,7 +120,7 @@ export function idxRoutes(client: IDXClient) {
         parameters: [
           { name: 'code', in: 'path', required: true, schema: { type: 'string', pattern: '^[A-Za-z]{4,6}$' }, description: 'Stock ticker code (e.g. BBRI, TLKM)' },
         ],
-        response: {
+        responses: {
           200: { description: 'Company profile', content: { 'application/json': { example: { success: true, data: { stockCode: 'BBRI', stockName: 'Bank Rakyat Indonesia', sector: 'Finance', listingDate: '2003-11-10' }, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           404: { description: 'Profile not found' },
           ...errResponses,

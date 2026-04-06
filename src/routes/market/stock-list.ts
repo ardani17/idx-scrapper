@@ -54,7 +54,7 @@ export function stockListRoute(stockList: StockListClient) {
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 }, description: 'Page number' },
           { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 500 }, description: 'Items per page (max 500)' },
         ],
-        response: {
+        responses: {
           200: { description: 'Paginated stock list', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BBRI', stockName: 'Bank Rakyat Indonesia', listingDate: '2003-11-10', board: 'Main' }], total: 800, page: 1, pageSize: 500, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
