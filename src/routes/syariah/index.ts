@@ -9,6 +9,13 @@ import { SyariahIndexClient } from '../../clients/syariah/index';
 import { SyariahTransactionClient } from '../../clients/syariah/transaction';
 import { slowCache } from '../../utils/cache';
 
+const security = [{ ApiKeyAuth: [] }];
+const errResponses = {
+  401: { $ref: '#/components/responses/Unauthorized' },
+  429: { $ref: '#/components/responses/RateLimited' },
+  503: { $ref: '#/components/responses/ServiceUnavailable' },
+};
+
 export function syariahRoutes() {
   const products = new SyariahProductsClient();
   const index = new SyariahIndexClient();
@@ -34,6 +41,17 @@ export function syariahRoutes() {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         return { success: false, error: msg };
       }
+    }, {
+      detail: {
+        tags: ['Syariah'],
+        summary: 'Syariah-compliant stocks',
+        description: 'List of all syariah-compliant stocks listed on IDX. These stocks meet Islamic finance criteria.',
+        security,
+        response: {
+          200: { description: 'Syariah stock list', content: { 'application/json': { example: { success: true, data: [{ stockCode: 'BRIS', stockName: 'Bank BRISyariah', category: 'Islamic Bank' }], total: 400, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
+          ...errResponses,
+        },
+      },
     })
 
     // ── Indeks Syariah ───────────────────────────
@@ -54,6 +72,17 @@ export function syariahRoutes() {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         return { success: false, error: msg };
       }
+    }, {
+      detail: {
+        tags: ['Syariah'],
+        summary: 'Syariah indices',
+        description: 'IDX syariah indices — JII (Jakarta Islamic Index), ISSI, and other Islamic-compliant indices.',
+        security,
+        response: {
+          200: { description: 'Syariah index data', content: { 'application/json': { example: { success: true, data: [{ index: 'JII', value: 520.3, change: 5.2, changePct: 1.01 }], total: 5, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
+          ...errResponses,
+        },
+      },
     })
 
     // ── Transaksi Sesuai Syariah ─────────────────
@@ -74,5 +103,16 @@ export function syariahRoutes() {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         return { success: false, error: msg };
       }
+    }, {
+      detail: {
+        tags: ['Syariah'],
+        summary: 'Syariah transaction data',
+        description: 'Trading volume and value for syariah-compliant securities.',
+        security,
+        response: {
+          200: { description: 'Syariah transaction data', content: { 'application/json': { example: { success: true, data: [{ date: '2025-01-01', volume: 5000000000, value: 3000000000000 }], total: 10, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
+          ...errResponses,
+        },
+      },
     });
 }

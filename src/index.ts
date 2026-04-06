@@ -1,6 +1,7 @@
 // IDX Scraper — Entry Point (Production-Ready)
 
 import { Elysia } from 'elysia';
+import { swagger } from '@elysiajs/swagger';
 import { CookieManager } from './clients/cookie-manager';
 import { IDXClient } from './clients/idx-client';
 import { DisclosureClient } from './clients/disclosure-client';
@@ -58,6 +59,40 @@ const stateFile = join(DATA_DIR, 'monitor-state.json');
 // ── Build app ───────────────────────────────────
 const app = new Elysia({ prefix: '/api' })
 
+  // ── Swagger Documentation ─────────────────────
+  .use(swagger({
+    path: '/docs',
+    documentation: {
+      openapi: '3.0.3',
+      info: {
+        title: 'IDX Scraper API',
+        version: '1.0.0',
+        description: 'Indonesian Stock Exchange (IDX) data API — market data, listed companies, news, disclosures, syariah info',
+        contact: { name: 'Ardani', url: 'https://cloudnexify.com' },
+      },
+      tags: [
+        { name: 'Health', description: 'Health check and system status' },
+        { name: 'Market', description: 'Real-time market data' },
+        { name: 'Listed', description: 'Listed company data' },
+        { name: 'News', description: 'IDX news' },
+        { name: 'Disclosure', description: 'Corporate disclosures' },
+        { name: 'Files', description: 'Downloaded files' },
+        { name: 'IDX Data', description: 'IDX company profiles' },
+        { name: 'Syariah', description: 'Syariah-compliant stocks' },
+        { name: 'Members', description: 'Exchange members' },
+        { name: 'Other', description: 'Market statistics' },
+        { name: 'Admin', description: 'API key management' },
+      ],
+      components: {
+        securitySchemes: {
+          ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
+          AdminKeyAuth: { type: 'apiKey', in: 'header', name: 'X-Admin-Key' },
+        },
+      },
+    },
+    exclude: ['/health'],
+  }))
+
   // ── CORS ──────────────────────────────────────
   .onTransform(({ request, set }) => {
     const origin = request.headers.get('origin');
@@ -79,8 +114,8 @@ const app = new Elysia({ prefix: '/api' })
   .onBeforeHandle(({ request, set }) => {
     const path = new URL(request.url).pathname;
 
-    // 1. Health + CORS preflight → exempt
-    if (path.includes('/health') || request.method === 'OPTIONS') return;
+    // 1. Health + Swagger + CORS preflight → exempt
+    if (path.includes('/health') || path.includes('/docs') || path.includes('/swagger') || request.method === 'OPTIONS') return;
 
     // 2. Admin endpoints → exempt from API key auth (admin routes check their own header)
     if (path.includes('/admin')) return;

@@ -4,8 +4,6 @@ import { Elysia, t } from 'elysia';
 import type { CookieManager } from '../clients/cookie-manager';
 import type { FileDownloader } from '../downloaders/file-downloader';
 import { marketCache, newsCache, slowCache } from '../utils/cache';
-import { RateLimiter } from '../utils/rate-limit';
-import { logger } from '../utils/logger';
 
 export function healthRoutes(cookieManager: CookieManager, downloader: FileDownloader) {
   return new Elysia({ prefix: '' })
@@ -21,7 +19,13 @@ export function healthRoutes(cookieManager: CookieManager, downloader: FileDownl
         slow: slowCache.size(),
       },
       timestamp: new Date().toISOString(),
-    }))
+    }), {
+      detail: {
+        tags: ['Health'],
+        summary: 'Health check',
+        description: 'API health status. No authentication required.',
+      },
+    })
 
     .get('/cookie/status', () => {
       const s = cookieManager.getStatus();
@@ -31,6 +35,11 @@ export function healthRoutes(cookieManager: CookieManager, downloader: FileDownl
         expiresAt: s.expiresAt ? new Date(s.expiresAt).toISOString() : null,
         remainingMin: Math.round(s.remainingMs / 60000),
       };
+    }, {
+      detail: {
+        tags: ['Health'],
+        summary: 'Cookie status',
+      },
     })
 
     .post('/cookie/set', async ({ body }) => {
@@ -38,10 +47,19 @@ export function healthRoutes(cookieManager: CookieManager, downloader: FileDownl
       return { success: true };
     }, {
       body: t.Object({ cookies: t.String() }),
+      detail: {
+        tags: ['Health'],
+        summary: 'Set session cookie',
+      },
     })
 
     .post('/cookie/refresh', async () => {
       const cookies = await cookieManager.refresh();
       return { success: true, cookieLength: cookies.length };
+    }, {
+      detail: {
+        tags: ['Health'],
+        summary: 'Refresh session cookie',
+      },
     });
 }
