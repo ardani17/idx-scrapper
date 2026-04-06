@@ -27,17 +27,15 @@ import { newsRoutes } from './routes/news/index';
 import { syariahRoutes } from './routes/syariah/index';
 import { membersRoutes } from './routes/members/index';
 import { otherRoutes } from './routes/other/index';
+import { adminRoutes } from './routes/admin';
+import { validateKey, checkRateLimit } from './services/key-manager';
 import { join } from 'path';
 import { logger } from './utils/logger';
-import { RateLimiter } from './utils/rate-limit';
 import { marketCache, newsCache, slowCache } from './utils/cache';
 
 const PORT = process.env.PORT || 3100;
 const DATA_DIR = join(import.meta.dir, '..', 'data');
 const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '60000', 10);
-
-// ── Rate Limiter ────────────────────────────────
-const rateLimiter = new RateLimiter(60, 60_000); // 60 req/min per IP
 
 // ── Extract client IP ───────────────────────────
 function getClientIp(request: Request): string {
@@ -62,11 +60,10 @@ const app = new Elysia({ prefix: '/api' })
 
   // ── CORS ──────────────────────────────────────
   .onTransform(({ request, set }) => {
-    // Set CORS headers for all responses
     const origin = request.headers.get('origin');
     set.headers['Access-Control-Allow-Origin'] = origin || '*';
-    set.headers['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, OPTIONS';
-    set.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-API-Key';
+    set.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS';
+    set.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-API-Key, X-Admin-Key';
     set.headers['Access-Control-Max-Age'] = '86400';
   })
   .options('/', ({ set }) => {
@@ -78,66 +75,65 @@ const app = new Elysia({ prefix: '/api' })
     return new Response(null, { status: 204 });
   })
 
-  // ── Rate Limiting ─────────────────────────────
-  .onBeforeHandle(({ request, set }) => {
-    const ip = getClientIp(request);
-    const path = new URL(request.url).pathname;
-
-    // Skip rate limiting for health checks
-    if (path.includes('/health')) return;
-
-    const { allowed, remaining, resetAt } = rateLimiter.check(ip);
-
-    set.headers['X-RateLimit-Remaining'] = String(remaining);
-    set.headers['X-RateLimit-Reset'] = String(Math.ceil(resetAt / 1000));
-
-    if (!allowed) {
-      set.status = 429;
-      logger.warn('Rate limit exceeded', { ip, path, resetAt });
-      return {
-        success: false,
-        error: 'Rate limit exceeded. Try again later.',
-        retryAfter: Math.ceil((resetAt - Date.now()) / 1000),
-      };
-    }
-  })
-
-  // ── API Key Authentication ─────────────────────
+  // ── Auth + Rate Limiting (tier-based) ─────────
   .onBeforeHandle(({ request, set }) => {
     const path = new URL(request.url).pathname;
 
-    // Exempt health endpoint and CORS preflight
+    // 1. Health + CORS preflight → exempt
     if (path.includes('/health') || request.method === 'OPTIONS') return;
 
-    const validKeys = (process.env.API_KEYS || 'test-key')
-      .split(',')
-      .map((k) => k.trim())
-      .filter(Boolean);
+    // 2. Admin endpoints → exempt from API key auth (admin routes check their own header)
+    if (path.includes('/admin')) return;
 
+    // 3. All other routes → validate API key + rate limits
     const providedKey = request.headers.get('X-API-Key');
+    const validation = validateKey(providedKey || '');
 
-    if (!providedKey || !validKeys.includes(providedKey)) {
+    if (!validation.valid) {
       set.status = 401;
-      logger.warn('Invalid or missing API key', {
-        path,
-        hasKey: !!providedKey,
-      });
+      logger.warn('Auth failed', { path, error: validation.error, hasKey: !!providedKey });
       return {
         success: false,
-        error: 'Invalid or missing API key',
+        error: validation.error || 'Invalid or missing API key',
         statusCode: 401,
       };
     }
+
+    // Key is valid — check rate + daily limits
+    const apiKeyData = validation.key;
+    if (!apiKeyData) {
+      set.status = 401;
+      return { success: false, error: 'Invalid API key', statusCode: 401 };
+    }
+
+    const rateCheck = checkRateLimit(apiKeyData);
+
+    // Set rate limit headers
+    set.headers['X-RateLimit-Limit'] = String(
+      apiKeyData.rateLimit === -1 ? 'unlimited' : apiKeyData.rateLimit
+    );
+    set.headers['X-RateLimit-Remaining'] = String(
+      rateCheck.remaining === -1 ? 'unlimited' : rateCheck.remaining
+    );
+    set.headers['X-RateLimit-Reset'] = String(rateCheck.resetAt);
+
+    if (!rateCheck.allowed) {
+      set.status = 429;
+      logger.warn('Rate limit hit', { path, keyId: apiKeyData.id, error: rateCheck.error });
+      return {
+        success: false,
+        error: rateCheck.error,
+        statusCode: 429,
+        retryAfter: Math.ceil(rateCheck.resetAt - Date.now() / 1000),
+      };
+    }
   })
-
-
 
   // ── Request Logging ───────────────────────────
   .onRequest(({ request }) => {
     const path = new URL(request.url).pathname;
     const ip = getClientIp(request);
     logger.info('Request', { method: request.method, path, ip });
-    return; // explicitly return nothing (not undefined)
   })
 
   // ── Global Error Handler ──────────────────────
@@ -166,11 +162,11 @@ const app = new Elysia({ prefix: '/api' })
   .onAfterResponse(({ request }) => {
     const path = new URL(request.url).pathname;
     logger.debug('Response', { path, status: 200 });
-    return;
   })
 
   // ── Mount Routes ──────────────────────────────
   .use(healthRoutes(cookieManager, downloader))
+  .use(adminRoutes)
   .use(idxRoutes(idxClient))
   .use(disclosureRoutes(disclosureClient, downloader, stateFile))
   .use(fileRoutes(downloader))
@@ -270,7 +266,15 @@ console.log(`
 ║    GET  /api/other/fact-sheet-lq45             ║
 ║    GET  /api/other/bond-book                   ║
 ║                                               ║
-║  Middleware: CORS, Rate Limit (60/min/IP),     ║
+║  Admin:                                        ║
+║    POST /api/admin/keys/generate               ║
+║    GET  /api/admin/keys                        ║
+║    GET  /api/admin/keys/:id                    ║
+║    PATCH /api/admin/keys/:id                   ║
+║    DELETE /api/admin/keys/:id                  ║
+║    GET  /api/admin/stats                       ║
+║                                               ║
+║  Middleware: CORS, Tiered Auth + Rate Limit,  ║
 ║             Error Handler, Structured Logging   ║
 ║                                               ║
 ║  Storage: ${DATA_DIR}/disclosures/    ║
@@ -281,7 +285,6 @@ console.log(`
 const shutdown = async () => {
   logger.info('Shutting down...');
   await downloader.destroy();
-  rateLimiter.destroy();
   marketCache.destroy();
   newsCache.destroy();
   slowCache.destroy();
