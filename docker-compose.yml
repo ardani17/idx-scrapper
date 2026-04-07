@@ -1,31 +1,26 @@
 # IDX Scraper API — Docker Compose
 #
-# External dependency: Redis 7 is required for caching.
-# The 'redis' service below provides it. In production you may point
-# REDIS_URL to a managed Redis instance and remove this service.
+# Self-contained: Redis included, no external dependencies.
 #
 # Usage:
-#   docker compose up -d
+#   docker compose up -d --build
 #   docker compose logs -f api
 #
-# Required environment variables (set in .env or shell):
-#   ADMIN_API_KEY  — minimum 32 characters
-
-version: '3.8'
+# All config is embedded — no .env file needed.
 
 services:
   api:
     build: .
     ports:
-      - "${PORT:-3100}:3100"
+      - "3100:3100"
     environment:
-      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - ADMIN_API_KEY=cefa7b54a23eb59345ed4bfc168ddd4e36659718
       - REDIS_URL=redis://redis:6379
       - PORT=3100
       - NODE_ENV=production
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - MAX_BROWSER_PAGES=${MAX_BROWSER_PAGES:-5}
+      - TZ=Asia/Jakarta
+      - LOG_LEVEL=info
+      - MAX_BROWSER_PAGES=5
     volumes:
       - api-data:/app/data
     depends_on:
@@ -35,15 +30,15 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # NO host port binding — internal only, no conflict with existing Redis
     volumes:
       - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
     restart: unless-stopped
 
 volumes:
