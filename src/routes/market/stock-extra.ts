@@ -8,6 +8,10 @@ import type { MarginStocksClient } from '../../clients/market/margin-stocks';
 import type { PreOpenStocksClient } from '../../clients/market/pre-open-stocks';
 import type { LpStocksClient } from '../../clients/market/lp-stocks';
 import { marketCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const MARKET_TTL_MS = 30_000;
+const MARKET_MAX_AGE = 30;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -24,23 +28,21 @@ export function stockExtraRoutes(
   return new Elysia()
 
     // ── Margin & Short Selling ───────────────────
-    .get('/margin-stocks', async () => {
-      try {
-        const cached = marketCache.get('/margin-stocks');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await margin.getMarginStocks();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        marketCache.set('/margin-stocks', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/margin-stocks', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/margin-stocks',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => margin.getMarginStocks(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Market'],
@@ -55,23 +57,21 @@ export function stockExtraRoutes(
     })
 
     // ── Pre-Opening Stocks ───────────────────────
-    .get('/pre-open', async () => {
-      try {
-        const cached = marketCache.get('/pre-open');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await preOpen.getPreOpenStocks();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        marketCache.set('/pre-open', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/pre-open', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/pre-open',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => preOpen.getPreOpenStocks(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Market'],
@@ -86,23 +86,21 @@ export function stockExtraRoutes(
     })
 
     // ── Liquidity Provider Stocks ────────────────
-    .get('/lp-stocks', async () => {
-      try {
-        const cached = marketCache.get('/lp-stocks');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await lp.getLpStocks();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        marketCache.set('/lp-stocks', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/lp-stocks', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/lp-stocks',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => lp.getLpStocks(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Market'],

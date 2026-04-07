@@ -7,6 +7,10 @@
 
 import { Elysia } from 'elysia';
 import { slowCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const SLOW_TTL_MS = 900_000;
+const SLOW_MAX_AGE = 900;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -24,18 +28,21 @@ export function listedRoutes(
 
   return new Elysia({ prefix: '/listed' })
 
-    .get('/corporate-action', async () => {
-      try {
-        const cached = slowCache.get('/listed/corporate-action');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await corporateAction.getCorporateAction();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        slowCache.set('/listed/corporate-action', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/corporate-action', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/listed/corporate-action',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => corporateAction.getCorporateAction(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Listed'],
@@ -49,18 +56,21 @@ export function listedRoutes(
       },
     })
 
-    .get('/calendar', async () => {
-      try {
-        const cached = slowCache.get('/listed/calendar');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await calendar.getCalendar();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        slowCache.set('/listed/calendar', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/calendar', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/listed/calendar',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => calendar.getCalendar(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Listed'],
@@ -74,18 +84,21 @@ export function listedRoutes(
       },
     })
 
-    .get('/special-notation', async () => {
-      try {
-        const cached = slowCache.get('/listed/special-notation');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await watchlist.getSpecialNotation();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        slowCache.set('/listed/special-notation', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/special-notation', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/listed/special-notation',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => watchlist.getSpecialNotation(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Listed'],
@@ -99,18 +112,21 @@ export function listedRoutes(
       },
     })
 
-    .get('/watchlist', async () => {
-      try {
-        const cached = slowCache.get('/listed/watchlist');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await watchlist.getWatchlistStocks();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        slowCache.set('/listed/watchlist', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/watchlist', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/listed/watchlist',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => watchlist.getWatchlistStocks(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Listed'],
@@ -124,18 +140,21 @@ export function listedRoutes(
       },
     })
 
-    .get('/esg-rating', async () => {
-      try {
-        const cached = slowCache.get('/listed/esg-rating');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await esg.getEsgRatings();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/en/listed-companies/esg/', _cached: false };
-        slowCache.set('/listed/esg-rating', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/esg-rating', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/listed/esg-rating',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => esg.getEsgRatings(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/en/listed-companies/esg/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Listed'],

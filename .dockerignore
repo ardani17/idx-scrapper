@@ -1,5 +1,8 @@
 node_modules/
-data/
 .git/
+data/
+logs/
 dist/
+tests/
+*.test.ts
 *.log

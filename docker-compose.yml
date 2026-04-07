@@ -1,0 +1,51 @@
+# IDX Scraper API — Docker Compose
+#
+# External dependency: Redis 7 is required for caching.
+# The 'redis' service below provides it. In production you may point
+# REDIS_URL to a managed Redis instance and remove this service.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f api
+#
+# Required environment variables (set in .env or shell):
+#   ADMIN_API_KEY  — minimum 32 characters
+
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "${PORT:-3100}:3100"
+    environment:
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - REDIS_URL=redis://redis:6379
+      - PORT=3100
+      - NODE_ENV=production
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - MAX_BROWSER_PAGES=${MAX_BROWSER_PAGES:-5}
+    volumes:
+      - api-data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  api-data:
+  redis-data:

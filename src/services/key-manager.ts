@@ -1,8 +1,10 @@
 // Key Manager — storage, generation, validation, daily usage, rate limiting
+// Async file I/O using Bun APIs with file permission 0600
 
 import { join } from 'path';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { TIERS, type TierName, isValidTier } from './tier-config.ts';
+import { logger } from '../utils/logger.ts';
 
 // ── Types ───────────────────────────────────────
 
@@ -12,8 +14,8 @@ export interface ApiKey {
   name: string;
   tier: TierName;
   email?: string;
-  rateLimit: number;      // effective per-key limit (-1 = unlimited)
-  dailyLimit: number;     // effective per-key limit (-1 = unlimited)
+  rateLimit: number;
+  dailyLimit: number;
   active: boolean;
   createdAt: string;
   expiresAt?: string;
@@ -25,7 +27,7 @@ interface KeysStore {
 }
 
 interface DailyUsage {
-  date: string;        // YYYY-MM-DD in WIB
+  date: string;
   counts: Record<string, number>;
 }
 
@@ -38,54 +40,59 @@ export interface KeyValidationResult {
 export interface RateCheckResult {
   allowed: boolean;
   remaining: number;
-  resetAt: number;       // unix seconds
+  resetAt: number;
   dailyRemaining: number;
-  dailyResetAt: number;  // unix seconds
+  dailyResetAt: number;
   error?: string;
 }
 
 // ── Data directory ──────────────────────────────
 
 const DATA_DIR = join(import.meta.dir, '..', '..', 'data');
+const KEYS_PATH = join(DATA_DIR, 'api-keys.json');
+const USAGE_PATH = join(DATA_DIR, 'daily-usage.json');
+const FILE_MODE = 0o600;
 
 function ensureDataDir(): void {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// ── Keys storage ────────────────────────────────
+// ── Async Keys storage (Bun APIs) ───────────────
 
-function readKeysStore(): KeysStore {
+async function readKeysStore(): Promise<KeysStore> {
   ensureDataDir();
-  const path = join(DATA_DIR, 'api-keys.json');
-  if (!existsSync(path)) return { keys: [] };
+  const file = Bun.file(KEYS_PATH);
+  if (!(await file.exists())) return { keys: [] };
   try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
+    const text = await file.text();
+    return JSON.parse(text);
   } catch {
     return { keys: [] };
   }
 }
 
-function writeKeysStore(store: KeysStore): void {
+async function writeKeysStore(store: KeysStore): Promise<void> {
   ensureDataDir();
-  writeFileSync(join(DATA_DIR, 'api-keys.json'), JSON.stringify(store, null, 2), 'utf-8');
+  await Bun.write(KEYS_PATH, JSON.stringify(store, null, 2), { mode: FILE_MODE });
 }
 
-// ── Daily usage storage ─────────────────────────
+// ── Async Daily usage storage (Bun APIs) ────────
 
-function readDailyUsage(): DailyUsage {
+async function readDailyUsage(): Promise<DailyUsage> {
   ensureDataDir();
-  const path = join(DATA_DIR, 'daily-usage.json');
-  if (!existsSync(path)) return { date: getTodayWib(), counts: {} };
+  const file = Bun.file(USAGE_PATH);
+  if (!(await file.exists())) return { date: getTodayWib(), counts: {} };
   try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
+    const text = await file.text();
+    return JSON.parse(text);
   } catch {
     return { date: getTodayWib(), counts: {} };
   }
 }
 
-function writeDailyUsage(usage: DailyUsage): void {
+async function writeDailyUsage(usage: DailyUsage): Promise<void> {
   ensureDataDir();
-  writeFileSync(join(DATA_DIR, 'daily-usage.json'), JSON.stringify(usage, null, 2), 'utf-8');
+  await Bun.write(USAGE_PATH, JSON.stringify(usage, null, 2), { mode: FILE_MODE });
 }
 
 // ── Time helpers (WIB = UTC+7) ──────────────────
@@ -117,7 +124,6 @@ interface RateWindow {
 const rateWindows = new Map<string, RateWindow>();
 const RATE_WINDOW_MS = 60_000;
 
-// Cleanup stale entries every 5 min
 setInterval(() => {
   const now = Date.now();
   for (const [k, e] of rateWindows) {
@@ -130,7 +136,7 @@ setInterval(() => {
 function randomHex(length: number): string {
   const arr = new Uint8Array(length);
   crypto.getRandomValues(arr);
-  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function generateId(): string {
@@ -142,43 +148,29 @@ function generateId(): string {
 function getLegacyKeys(): string[] {
   const env = process.env.API_KEYS;
   if (!env) return [];
-  return env.split(',').map(k => k.trim()).filter(Boolean);
+  return env.split(',').map((k) => k.trim()).filter(Boolean);
 }
 
 // ── Mask key for display ────────────────────────
+// Show first 10 characters + "..." + last 4 characters
 
 export function maskKey(key: string): string {
-  if (key.length <= 20) return key.slice(0, 8) + '...' + key.slice(-4);
+  if (key.length <= 14) return key;
   return key.slice(0, 10) + '...' + key.slice(-4);
 }
 
-// ═══════════════════════════════════════════════════
-// PUBLIC API
-// ═══════════════════════════════════════════════════
+// ── Public API (all async) ──────────────────────
 
-/**
- * Generate a new API key.
- */
-export function generateKey(opts: {
+export async function generateKey(opts: {
   name: string;
   tier: TierName;
   email?: string;
   rateLimit?: number;
   dailyLimit?: number;
-}): ApiKey {
+}): Promise<ApiKey> {
+  const tierConfig = TIERS[opts.tier] as { rateLimit: number; dailyLimit: number };
   const id = generateId();
   const key = `idsk_live_${randomHex(32)}`;
-  const tierDef = TIERS[opts.tier];
-  if (!tierDef) throw new Error(`Unknown tier: ${opts.tier}`);
-
-  let rl = tierDef.rateLimit;
-  let dl = tierDef.dailyLimit;
-
-  if (tierDef.custom) {
-    // Advanced tier: use custom limits, 0 or null → -1 (unlimited)
-    rl = (opts.rateLimit && opts.rateLimit > 0) ? opts.rateLimit : -1;
-    dl = (opts.dailyLimit && opts.dailyLimit > 0) ? opts.dailyLimit : -1;
-  }
 
   const apiKey: ApiKey = {
     id,
@@ -186,290 +178,222 @@ export function generateKey(opts: {
     name: opts.name,
     tier: opts.tier,
     email: opts.email,
-    rateLimit: rl,
-    dailyLimit: dl,
+    rateLimit: opts.rateLimit ?? tierConfig.rateLimit,
+    dailyLimit: opts.dailyLimit ?? tierConfig.dailyLimit,
     active: true,
     createdAt: new Date().toISOString(),
   };
 
-  const store = readKeysStore();
+  const store = await readKeysStore();
   store.keys.push(apiKey);
-  writeKeysStore(store);
+  await writeKeysStore(store);
 
+  logger.info('Key generated', { id, tier: opts.tier });
   return apiKey;
 }
 
-/**
- * List all keys (masked).
- */
-export function listKeys(): (Omit<ApiKey, 'key' | 'email' | 'rateLimit' | 'dailyLimit'> & { keyPrefix: string; dailyUsage: number })[] {
-  const store = readKeysStore();
-  const usage = readDailyUsage();
-
-  return store.keys.map(k => ({
-    id: k.id,
-    keyPrefix: maskKey(k.key),
-    name: k.name,
-    tier: k.tier,
-    dailyUsage: usage.counts[k.id] || 0,
-    lastUsed: k.lastUsed,
-    createdAt: k.createdAt,
-    active: k.active,
-  }));
-}
-
-/**
- * Get single key detail.
- */
-export function getKey(id: string): (ApiKey & { keyPrefix: string; dailyUsage: number }) | null {
-  const store = readKeysStore();
-  const usage = readDailyUsage();
-  const found = store.keys.find(k => k.id === id);
-  if (!found) return null;
-  return { ...found, keyPrefix: maskKey(found.key), dailyUsage: usage.counts[found.id] || 0 };
-}
-
-/**
- * Update a key (tier, name, active, and optionally rateLimit/dailyLimit for advanced).
- */
-export function updateKey(id: string, updates: Partial<Pick<ApiKey, 'name' | 'tier' | 'active' | 'rateLimit' | 'dailyLimit'>>): ApiKey | null {
-  const store = readKeysStore();
-  const found = store.keys.find(k => k.id === id);
-  if (!found) return null;
-
-  if (updates.name !== undefined) found.name = updates.name;
-  if (updates.active !== undefined) found.active = updates.active;
-
-  if (updates.tier && isValidTier(updates.tier)) {
-    found.tier = updates.tier;
-    const tierDef = TIERS[updates.tier];
-    if (!tierDef) throw new Error(`Unknown tier: ${updates.tier}`);
-
-    if (tierDef.custom) {
-      // Advanced: apply custom limits if provided
-      if (updates.rateLimit !== undefined && updates.rateLimit > 0) {
-        found.rateLimit = updates.rateLimit;
-      } else {
-        found.rateLimit = -1;
-      }
-      if (updates.dailyLimit !== undefined && updates.dailyLimit > 0) {
-        found.dailyLimit = updates.dailyLimit;
-      } else {
-        found.dailyLimit = -1;
-      }
-    } else {
-      found.rateLimit = tierDef.rateLimit;
-      found.dailyLimit = tierDef.dailyLimit;
-    }
-  }
-
-  // Allow updating limits directly for advanced tier keys
-  if (found.tier === 'advanced') {
-    if (updates.rateLimit !== undefined) {
-      found.rateLimit = (updates.rateLimit > 0) ? updates.rateLimit : -1;
-    }
-    if (updates.dailyLimit !== undefined) {
-      found.dailyLimit = (updates.dailyLimit > 0) ? updates.dailyLimit : -1;
-    }
-  }
-
-  writeKeysStore(store);
-  return found;
-}
-
-/**
- * Delete (revoke) a key.
- */
-export function deleteKey(id: string): boolean {
-  const store = readKeysStore();
-  const idx = store.keys.findIndex(k => k.id === id);
-  if (idx === -1) return false;
-  store.keys.splice(idx, 1);
-  writeKeysStore(store);
-  return true;
-}
-
-/**
- * Get usage statistics.
- */
-export function getStats(): {
-  totalKeys: number;
-  keysPerTier: Record<string, number>;
-  totalRequestsToday: number;
-  topConsumers: { id: string; name: string; tier: string; count: number }[];
-} {
-  const store = readKeysStore();
-  const usage = readDailyUsage();
-
-  const keysPerTier: Record<string, number> = {};
-  for (const k of store.keys) {
-    keysPerTier[k.tier] = (keysPerTier[k.tier] || 0) + 1;
-  }
-
-  let totalRequestsToday = 0;
-  const consumers: { id: string; name: string; tier: string; count: number }[] = [];
-
-  for (const k of store.keys) {
-    const count = usage.counts[k.id] || 0;
-    totalRequestsToday += count;
-    if (count > 0) {
-      consumers.push({ id: k.id, name: k.name, tier: k.tier, count });
-    }
-  }
-
-  consumers.sort((a, b) => b.count - a.count);
-
-  return {
-    totalKeys: store.keys.length,
-    keysPerTier,
-    totalRequestsToday,
-    topConsumers: consumers.slice(0, 10),
-  };
-}
-
-/**
- * Validate an API key and check rate + daily limits.
- * Does NOT increment counters — use checkRateLimit() after this.
- */
-export function validateKey(providedKey: string): KeyValidationResult {
+export async function validateKey(providedKey: string): Promise<KeyValidationResult> {
   if (!providedKey) {
-    return { valid: false, error: 'Missing X-API-Key header' };
+    return { valid: false, error: 'API key tidak valid' };
   }
 
-  // 1. Check legacy keys (treated as pro)
-  const legacy = getLegacyKeys();
-  if (legacy.includes(providedKey)) {
-    // Return a virtual pro key
+  // Check legacy env-based keys first
+  const legacyKeys = getLegacyKeys();
+  if (legacyKeys.includes(providedKey)) {
     return {
       valid: true,
       key: {
         id: 'legacy',
         key: providedKey,
         name: 'Legacy Key',
-        tier: 'pro',
+        tier: 'pro' as TierName,
         rateLimit: -1,
         dailyLimit: -1,
         active: true,
-        createdAt: new Date(0).toISOString(),
+        createdAt: new Date().toISOString(),
       },
     };
   }
 
-  // 2. Look up in api-keys.json
-  const store = readKeysStore();
-  const found = store.keys.find(k => k.key === providedKey);
+  // Check stored keys — iterate all for constant-time-like behavior
+  const store = await readKeysStore();
+  let found: ApiKey | undefined;
+  for (const k of store.keys) {
+    if (k.key === providedKey) {
+      found = k;
+    }
+  }
+
+  // Key not found -> generic error
   if (!found) {
-    return { valid: false, error: 'Invalid API key' };
+    return { valid: false, error: 'API key tidak valid' };
   }
+
+  // Key inactive -> same generic error (no distinction per Req 12.6)
   if (!found.active) {
-    return { valid: false, error: 'API key is deactivated' };
+    return { valid: false, error: 'API key tidak valid' };
   }
+
+  // Check expiry (Req 12.4)
+  if (found.expiresAt) {
+    const expiryDate = new Date(found.expiresAt);
+    if (expiryDate.getTime() <= Date.now()) {
+      return { valid: false, error: 'API key telah kedaluwarsa' };
+    }
+  }
+
+  // Update lastUsed
+  found.lastUsed = new Date().toISOString();
+  await writeKeysStore(store);
 
   return { valid: true, key: found };
 }
 
-/**
- * Check and increment rate + daily limits for a key.
- * Must be called AFTER validateKey() succeeds.
- */
-export function checkRateLimit(keyData: ApiKey): RateCheckResult {
+export async function checkRateLimit(apiKey: ApiKey): Promise<RateCheckResult> {
   const now = Date.now();
-  const resetAtSec = Math.ceil((now + RATE_WINDOW_MS) / 1000);
-  const dailyResetAtSec = Math.ceil(getMidnightResetWib() / 1000);
+  const midnightReset = getMidnightResetWib();
+  const dailyResetAt = Math.floor(midnightReset / 1000);
 
-  // ── Per-minute rate limiting ──
-  let remaining = 0;
-  const rl = keyData.rateLimit;
-  if (rl === -1) {
-    // Unlimited
-    remaining = -1;
-  } else {
-    let window = rateWindows.get(keyData.id);
-    if (!window || (now - window.windowStart) >= RATE_WINDOW_MS) {
-      window = { count: 0, windowStart: now };
-      rateWindows.set(keyData.id, window);
-    }
-    window.count++;
-    remaining = Math.max(0, rl - window.count);
+  // Per-minute rate limit
+  let remaining = apiKey.rateLimit === -1 ? -1 : apiKey.rateLimit;
+  let resetAt = Math.floor((now + RATE_WINDOW_MS) / 1000);
 
-    if (window.count > rl) {
-      const retrySec = Math.ceil((window.windowStart + RATE_WINDOW_MS - now) / 1000);
-      return {
-        allowed: false,
-        remaining: 0,
-        resetAt: resetAtSec,
-        dailyRemaining: getDailyRemaining(keyData),
-        dailyResetAt: dailyResetAtSec,
-        error: `Rate limit exceeded. Try again in ${retrySec} seconds.`,
-      };
+  if (apiKey.rateLimit !== -1) {
+    const window = rateWindows.get(apiKey.id);
+    if (!window || now - window.windowStart >= RATE_WINDOW_MS) {
+      rateWindows.set(apiKey.id, { count: 1, windowStart: now });
+      remaining = apiKey.rateLimit - 1;
+    } else {
+      window.count++;
+      remaining = Math.max(0, apiKey.rateLimit - window.count);
+      resetAt = Math.floor((window.windowStart + RATE_WINDOW_MS) / 1000);
+
+      if (window.count > apiKey.rateLimit) {
+        return {
+          allowed: false,
+          remaining: 0,
+          resetAt,
+          dailyRemaining: -1,
+          dailyResetAt,
+          error: `Rate limit terlampaui. Batas: ${apiKey.rateLimit}/menit. Coba lagi setelah reset.`,
+        };
+      }
     }
   }
 
-  // ── Daily limit checking ──
-  const dl = keyData.dailyLimit;
-  if (dl !== -1) {
-    const usage = ensureDailyUsageToday();
-    const currentCount = usage.counts[keyData.id] || 0;
+  // Daily limit
+  let dailyRemaining = apiKey.dailyLimit === -1 ? -1 : apiKey.dailyLimit;
 
-    if (currentCount >= dl) {
+  if (apiKey.dailyLimit !== -1) {
+    const usage = await readDailyUsage();
+    const today = getTodayWib();
+
+    if (usage.date !== today) {
+      usage.date = today;
+      usage.counts = {};
+    }
+
+    const currentCount = (usage.counts[apiKey.id] || 0) + 1;
+    usage.counts[apiKey.id] = currentCount;
+    dailyRemaining = Math.max(0, apiKey.dailyLimit - currentCount);
+
+    if (currentCount > apiKey.dailyLimit) {
+      await writeDailyUsage(usage);
       return {
         allowed: false,
         remaining,
-        resetAt: resetAtSec,
+        resetAt,
         dailyRemaining: 0,
-        dailyResetAt: dailyResetAtSec,
-        error: 'Daily limit exceeded. Upgrade your plan or contact support.',
+        dailyResetAt,
+        error: `Batas harian terlampaui (${apiKey.dailyLimit}/hari). Reset tengah malam WIB.`,
       };
     }
+
+    await writeDailyUsage(usage);
   }
 
-  // Increment daily usage
-  incrementDailyUsage(keyData.id);
+  return { allowed: true, remaining, resetAt, dailyRemaining, dailyResetAt };
+}
 
-  // Update lastUsed
-  touchLastUsed(keyData.id);
+export async function listKeys(): Promise<Array<Omit<ApiKey, 'key'> & { key: string }>> {
+  const store = await readKeysStore();
+  return store.keys.map((k) => ({ ...k, key: maskKey(k.key) }));
+}
+
+export async function getKey(id: string): Promise<(Omit<ApiKey, 'key'> & { key: string }) | null> {
+  const store = await readKeysStore();
+  const found = store.keys.find((k) => k.id === id);
+  if (!found) return null;
+  return { ...found, key: maskKey(found.key) };
+}
+
+export async function updateKey(
+  id: string,
+  updates: Record<string, unknown>,
+): Promise<(Omit<ApiKey, 'key'> & { key: string }) | null> {
+  const store = await readKeysStore();
+  const idx = store.keys.findIndex((k) => k.id === id);
+  if (idx === -1) return null;
+
+  const existing = store.keys[idx]!;
+  if (updates.name !== undefined) existing.name = updates.name as string;
+  if (updates.tier !== undefined && isValidTier(updates.tier as string)) {
+    existing.tier = updates.tier as TierName;
+    const tc = TIERS[existing.tier] as { rateLimit: number; dailyLimit: number };
+    if (updates.rateLimit === undefined) existing.rateLimit = tc.rateLimit;
+    if (updates.dailyLimit === undefined) existing.dailyLimit = tc.dailyLimit;
+  }
+  if (updates.active !== undefined) existing.active = updates.active as boolean;
+  if (updates.rateLimit !== undefined) existing.rateLimit = updates.rateLimit as number;
+  if (updates.dailyLimit !== undefined) existing.dailyLimit = updates.dailyLimit as number;
+  if (updates.email !== undefined) existing.email = updates.email as string;
+  if (updates.expiresAt !== undefined) existing.expiresAt = updates.expiresAt as string;
+
+  store.keys[idx] = existing;
+  await writeKeysStore(store);
+
+  return { ...existing, key: maskKey(existing.key) };
+}
+
+export async function deleteKey(id: string): Promise<boolean> {
+  const store = await readKeysStore();
+  const idx = store.keys.findIndex((k) => k.id === id);
+  if (idx === -1) return false;
+
+  store.keys.splice(idx, 1);
+  await writeKeysStore(store);
+  return true;
+}
+
+export async function getStats(): Promise<{
+  totalKeys: number;
+  activeKeys: number;
+  keysByTier: Record<string, number>;
+  totalRequestsToday: number;
+  topConsumers: Array<{ id: string; name: string; count: number }>;
+}> {
+  const store = await readKeysStore();
+  const usage = await readDailyUsage();
+  const today = getTodayWib();
+
+  const keysByTier: Record<string, number> = {};
+  for (const k of store.keys) {
+    keysByTier[k.tier] = (keysByTier[k.tier] || 0) + 1;
+  }
+
+  const counts = usage.date === today ? usage.counts : {};
+  const totalRequestsToday = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  const topConsumers = store.keys
+    .map((k) => ({ id: k.id, name: k.name, count: counts[k.id] || 0 }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 
   return {
-    allowed: true,
-    remaining,
-    resetAt: resetAtSec,
-    dailyRemaining: getDailyRemaining(keyData),
-    dailyResetAt: dailyResetAtSec,
+    totalKeys: store.keys.length,
+    activeKeys: store.keys.filter((k) => k.active).length,
+    keysByTier,
+    totalRequestsToday,
+    topConsumers,
   };
-}
-
-// ── Internal helpers ────────────────────────────
-
-function ensureDailyUsageToday(): DailyUsage {
-  const today = getTodayWib();
-  let usage = readDailyUsage();
-  if (usage.date !== today) {
-    usage = { date: today, counts: {} };
-    writeDailyUsage(usage);
-  }
-  return usage;
-}
-
-function incrementDailyUsage(keyId: string): void {
-  const usage = ensureDailyUsageToday();
-  usage.counts[keyId] = (usage.counts[keyId] || 0) + 1;
-  writeDailyUsage(usage);
-}
-
-function getDailyRemaining(keyData: ApiKey): number {
-  if (keyData.dailyLimit === -1) return -1; // unlimited
-  const today = getTodayWib();
-  let usage = readDailyUsage();
-  if (usage.date !== today) return keyData.dailyLimit;
-  return Math.max(0, keyData.dailyLimit - (usage.counts[keyData.id] || 0));
-}
-
-function touchLastUsed(keyId: string): void {
-  if (keyId === 'legacy') return; // don't persist
-  const store = readKeysStore();
-  const found = store.keys.find(k => k.id === keyId);
-  if (found) {
-    found.lastUsed = new Date().toISOString();
-    writeKeysStore(store);
-  }
 }

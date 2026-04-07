@@ -1,7 +1,7 @@
 // IDX API Helpers — Cloudflare bypass v2
 // Strategy: navigate langsung ke URL API sebagai page (CF solve untuk URL itu)
 
-import { createPage } from './browser';
+import { browserManager } from './browser';
 import { logger } from './logger';
 
 export interface FetchIdxOptions {
@@ -38,7 +38,7 @@ export async function fetchIdxApi<T = any>(options: FetchIdxOptions): Promise<T>
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-    const page = await createPage();
+    const page = await browserManager.acquirePage();
     try {
       // Optionally visit landing page first for cookie context
       if (landingPage) {
@@ -90,7 +90,7 @@ export async function fetchIdxApi<T = any>(options: FetchIdxOptions): Promise<T>
         error: lastError.message,
       });
     } finally {
-      await page.close().catch(() => {});
+      await browserManager.releasePage(page);
     }
 
     if (attempt <= maxRetries) {

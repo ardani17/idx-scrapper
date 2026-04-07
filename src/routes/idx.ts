@@ -16,7 +16,7 @@ export function idxRoutes(client: IDXClient) {
     .get('/relisting', async ({ query }) => {
       try {
         const cacheKey = `/relisting-${query.pageSize}-${query.indexFrom}`;
-        const cached = slowCache.get(cacheKey);
+        const cached = await slowCache.get(cacheKey);
         if (cached) return { ...cached, _cached: true };
 
         const data = await client.getRelistingData(query.pageSize, query.indexFrom);
@@ -25,7 +25,7 @@ export function idxRoutes(client: IDXClient) {
           fetchedAt: new Date().toISOString(),
           _source: 'https://www.idx.co.id/', _cached: false,
         };
-        slowCache.set(cacheKey, result);
+        await slowCache.set(cacheKey, result);
         return result;
       } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
@@ -54,7 +54,7 @@ export function idxRoutes(client: IDXClient) {
     .get('/emiten', async ({ query }) => {
       try {
         const cacheKey = `/emiten-${query.page}`;
-        const cached = slowCache.get(cacheKey);
+        const cached = await slowCache.get(cacheKey);
         if (cached) return { ...cached, _cached: true };
 
         const data = await client.getEmitenList(query.page);
@@ -63,7 +63,7 @@ export function idxRoutes(client: IDXClient) {
           fetchedAt: new Date().toISOString(),
           _source: 'https://www.idx.co.id/', _cached: false,
         };
-        slowCache.set(cacheKey, result);
+        await slowCache.set(cacheKey, result);
         return result;
       } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
@@ -90,7 +90,7 @@ export function idxRoutes(client: IDXClient) {
     .get('/profile/:code', async ({ params, set }) => {
       try {
         const cacheKey = `/profile-${params.code}`;
-        const cached = slowCache.get(cacheKey);
+        const cached = await slowCache.get(cacheKey);
         if (cached) return { ...cached, _cached: true };
 
         const data = await client.getCompanyProfile(params.code);
@@ -103,7 +103,7 @@ export function idxRoutes(client: IDXClient) {
           fetchedAt: new Date().toISOString(),
           _source: 'https://www.idx.co.id/', _cached: false,
         };
-        slowCache.set(cacheKey, result);
+        await slowCache.set(cacheKey, result);
         return result;
       } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };

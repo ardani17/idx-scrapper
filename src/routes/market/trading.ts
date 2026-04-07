@@ -6,6 +6,10 @@ import { Elysia } from 'elysia';
 import type { TradingSummaryClient } from '../../clients/market/trading-summary';
 import type { BrokerSummaryClient } from '../../clients/market/broker-summary';
 import { marketCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const MARKET_TTL_MS = 30_000;
+const MARKET_MAX_AGE = 30;
 
 export function tradingRoutes(
   trading: TradingSummaryClient,
@@ -14,25 +18,22 @@ export function tradingRoutes(
   return new Elysia()
 
     // ── Trading Summary ─────────────────────────
-    .get('/trading-summary', async () => {
-      try {
-        const cached = marketCache.get('/trading-summary');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await trading.getTradeSummary();
-        const result = {
-          success: true,
-          data,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/trading-summary', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/trading-summary', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/trading-summary',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => trading.getTradeSummary(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true,
+        data,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/',
+        _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Market'],
@@ -49,25 +50,22 @@ export function tradingRoutes(
     })
 
     // ── Broker Summary ──────────────────────────
-    .get('/broker-summary', async () => {
-      try {
-        const cached = marketCache.get('/broker-summary');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await broker.getBrokerSummary();
-        const result = {
-          success: true,
-          data,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/broker-summary', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/broker-summary', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/broker-summary',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => broker.getBrokerSummary(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true,
+        data,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/',
+        _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Market'],
@@ -78,6 +76,7 @@ export function tradingRoutes(
           200: { description: 'Broker summary data', content: { 'application/json': { example: { success: true, data: [{ brokerCode: 'YP', brokerName: 'Mirae Asset', totalValue: 500000000000 }], fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           401: { $ref: '#/components/responses/Unauthorized' },
           429: { $ref: '#/components/responses/RateLimited' },
+          503: { $ref: '#/components/responses/ServiceUnavailable' },
         },
       },
     });

@@ -7,6 +7,10 @@ import { Elysia } from 'elysia';
 import type { DerivativesClient } from '../../clients/market/derivatives';
 import type { EtfClient } from '../../clients/market/etf';
 import { marketCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const MARKET_TTL_MS = 30_000;
+const MARKET_MAX_AGE = 30;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -18,22 +22,21 @@ const errResponses = {
 export function derivativesRoutes(derivatives: DerivativesClient, etf: EtfClient) {
   return new Elysia()
 
-    .get('/derivatives', async () => {
-      try {
-        const cached = marketCache.get('/derivatives');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await derivatives.getDerivativeSummary();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        marketCache.set('/derivatives', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/derivatives', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/derivatives',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => derivatives.getDerivativeSummary(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Market'],
@@ -47,22 +50,21 @@ export function derivativesRoutes(derivatives: DerivativesClient, etf: EtfClient
       },
     })
 
-    .get('/etf-list', async () => {
-      try {
-        const cached = marketCache.get('/etf-list');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await etf.getEtfList();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        marketCache.set('/etf-list', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/etf-list', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/etf-list',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => etf.getEtfList(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Market'],
@@ -76,22 +78,21 @@ export function derivativesRoutes(derivatives: DerivativesClient, etf: EtfClient
       },
     })
 
-    .get('/etf-inav', async () => {
-      try {
-        const cached = marketCache.get('/etf-inav');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await etf.getEtfInav();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        marketCache.set('/etf-inav', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/etf-inav', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/etf-inav',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => etf.getEtfInav(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Market'],

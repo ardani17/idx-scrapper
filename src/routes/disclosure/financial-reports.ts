@@ -8,6 +8,10 @@ import type { ReportType } from '../../types';
 import { enrichFinancialReportAttachments } from '../../utils/response';
 import { REPORT_TYPE_NAMES } from '../../types';
 import { newsCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const DISCLOSURE_TTL_MS = 300_000;
+const DISCLOSURE_MAX_AGE = 300;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -23,61 +27,64 @@ export function financialReportsRoutes(
   return new Elysia()
 
     // ── Financial Reports ────────────────────────
-    .get('/financial-reports', async ({ query }) => {
+    .get('/financial-reports', async ({ query, set }) => {
       const reportType = (query.reportType || 'ra') as ReportType;
-      const cacheKey = `/financial-reports-${reportType}-${query.year || ''}-${query.kodeEmiten || ''}`;
-      const cached = newsCache.get(cacheKey);
-      if (cached) return { ...cached, _cached: true };
 
-      const { results, totalCount, usedPeriode } = await disclosure.getFinancialReports({
-        reportType, year: query.year, kodeEmiten: query.kodeEmiten,
-        pageSize: query.pageSize, sortByDate: true,
-      });
+      // Download mode bypasses cache
+      if (query.download === 'true') {
+        const { results, totalCount, usedPeriode } = await disclosure.getFinancialReports({
+          reportType, year: query.year, kodeEmiten: query.kodeEmiten,
+          pageSize: query.pageSize, sortByDate: true,
+        });
+        const enrichedReports = enrichFinancialReportAttachments(results);
 
-      const enrichedReports = enrichFinancialReportAttachments(results);
-
-      if (query.download !== 'true') {
-        const response = {
-          success: true,
-          data: enrichedReports,
-          total: totalCount,
-          reportType,
-          reportTypeName: REPORT_TYPE_NAMES[reportType],
-          year: query.year,
-          usedPeriode,
-          fetchedAt: new Date().toISOString(),
-          _cached: false,
-        };
-        newsCache.set(cacheKey, response);
-        return response;
-      }
-
-      const downloads = [];
-      for (const r of results.slice(0, query.downloadLimit)) {
-        if (r.attachments.length) {
-          const files = r.attachments.map(a => ({
-            name: a.fileName,
-            url: a.filePath.startsWith('http') ? a.filePath : `https://www.idx.co.id${a.filePath}`,
-          }));
-          const dl = await downloader.downloadFiles(files, `${r.reportYear}-01-01`, r.kodeEmiten);
-          downloads.push({
-            kodeEmiten: r.kodeEmiten,
-            namaEmiten: r.namaEmiten,
-            ...dl,
-          });
+        const downloads = [];
+        for (const r of results.slice(0, query.downloadLimit)) {
+          if (r.attachments.length) {
+            const files = r.attachments.map((a: any) => ({
+              name: a.fileName,
+              url: a.filePath.startsWith('http') ? a.filePath : `https://www.idx.co.id${a.filePath}`,
+            }));
+            const dl = await downloader.downloadFiles(files, `${r.reportYear}-01-01`, r.kodeEmiten);
+            downloads.push({ kodeEmiten: r.kodeEmiten, namaEmiten: r.namaEmiten, ...dl });
+          }
         }
+
+        return {
+          success: true, data: enrichedReports, total: totalCount,
+          reportType, reportTypeName: REPORT_TYPE_NAMES[reportType],
+          year: query.year, usedPeriode,
+          fetchedAt: new Date().toISOString(), downloads,
+        };
       }
 
+      const cacheKey = `/financial-reports-${reportType}-${query.year || ''}-${query.kodeEmiten || ''}`;
+
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey,
+        ttlMs: DISCLOSURE_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: async () => {
+          const { results, totalCount, usedPeriode } = await disclosure.getFinancialReports({
+            reportType, year: query.year, kodeEmiten: query.kodeEmiten,
+            pageSize: query.pageSize, sortByDate: true,
+          });
+          const enrichedReports = enrichFinancialReportAttachments(results);
+          return { reports: enrichedReports, totalCount, usedPeriode };
+        },
+      });
+      set.headers['Cache-Control'] = `max-age=${DISCLOSURE_MAX_AGE}`;
       return {
         success: true,
-        data: enrichedReports,
-        total: totalCount,
+        data: data.reports,
+        total: data.totalCount,
         reportType,
         reportTypeName: REPORT_TYPE_NAMES[reportType],
         year: query.year,
-        usedPeriode,
+        usedPeriode: data.usedPeriode,
         fetchedAt: new Date().toISOString(),
-        downloads,
+        _cached: cached,
       };
     }, {
       query: t.Object({

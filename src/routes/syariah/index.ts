@@ -8,6 +8,10 @@ import { SyariahProductsClient } from '../../clients/syariah/products';
 import { SyariahIndexClient } from '../../clients/syariah/index';
 import { SyariahTransactionClient } from '../../clients/syariah/transaction';
 import { slowCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const SLOW_TTL_MS = 900_000;
+const SLOW_MAX_AGE = 900;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -24,23 +28,21 @@ export function syariahRoutes() {
   return new Elysia({ prefix: '/syariah' })
 
     // ── Daftar Saham Syariah ─────────────────────
-    .get('/products', async () => {
-      try {
-        const cached = slowCache.get('/syariah/products');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await products.getSyariahProducts();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        slowCache.set('/syariah/products', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/products', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/syariah/products',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => products.getSyariahProducts(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Syariah'],
@@ -55,23 +57,21 @@ export function syariahRoutes() {
     })
 
     // ── Indeks Syariah ───────────────────────────
-    .get('/index', async () => {
-      try {
-        const cached = slowCache.get('/syariah/index');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await index.getSyariahIndex();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        slowCache.set('/syariah/index', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/index', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/syariah/index',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => index.getSyariahIndex(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Syariah'],
@@ -86,23 +86,21 @@ export function syariahRoutes() {
     })
 
     // ── Transaksi Sesuai Syariah ─────────────────
-    .get('/transaction', async () => {
-      try {
-        const cached = slowCache.get('/syariah/transaction');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await transaction.getSyariahTransaction();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        slowCache.set('/syariah/transaction', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/transaction', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/syariah/transaction',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => transaction.getSyariahTransaction(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Syariah'],

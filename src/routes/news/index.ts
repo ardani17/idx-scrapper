@@ -17,6 +17,10 @@ import type { SuspensionClient } from '../../clients/news/suspension';
 import type { EtdTdClient } from '../../clients/news/etd-td';
 import type { TradingHolidayClient } from '../../clients/news/trading-holiday';
 import { newsCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const NEWS_TTL_MS = 300_000;
+const NEWS_MAX_AGE = 300;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -36,22 +40,24 @@ export function newsRoutes(
 ) {
   return new Elysia({ prefix: '/news' })
 
-    .get('/', async () => {
-      try {
-        const cached = newsCache.get('/news');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await news.getNews();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        newsCache.set('/news', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey: '/news',
+        ttlMs: NEWS_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => news.getNews(),
+      });
+      set.headers['Cache-Control'] = `max-age=${NEWS_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['News'],
-        summary: 'IDX news',
+        tags: ['News'], summary: 'IDX news',
         description: 'Latest IDX news and announcements.',
         security,
         responses: {
@@ -61,22 +67,24 @@ export function newsRoutes(
       },
     })
 
-    .get('/press-release', async () => {
-      try {
-        const cached = newsCache.get('/news/press-release');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await press.getPressRelease();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        newsCache.set('/news/press-release', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/press-release', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey: '/news/press-release',
+        ttlMs: NEWS_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => press.getPressRelease(),
+      });
+      set.headers['Cache-Control'] = `max-age=${NEWS_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['News'],
-        summary: 'Press releases',
+        tags: ['News'], summary: 'Press releases',
         description: 'Official IDX press releases.',
         security,
         responses: {
@@ -86,22 +94,24 @@ export function newsRoutes(
       },
     })
 
-    .get('/articles', async () => {
-      try {
-        const cached = newsCache.get('/news/articles');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await articles.getArticles();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        newsCache.set('/news/articles', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/articles', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey: '/news/articles',
+        ttlMs: NEWS_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => articles.getArticles(),
+      });
+      set.headers['Cache-Control'] = `max-age=${NEWS_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['News'],
-        summary: 'IDX articles',
+        tags: ['News'], summary: 'IDX articles',
         description: 'Articles and market insights published by IDX.',
         security,
         responses: {
@@ -111,22 +121,24 @@ export function newsRoutes(
       },
     })
 
-    .get('/uma', async () => {
-      try {
-        const cached = newsCache.get('/news/uma');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await uma.getUma();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        newsCache.set('/news/uma', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/uma', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey: '/news/uma',
+        ttlMs: NEWS_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => uma.getUma(),
+      });
+      set.headers['Cache-Control'] = `max-age=${NEWS_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['News'],
-        summary: 'UMA (Unusual Market Activity)',
+        tags: ['News'], summary: 'UMA (Unusual Market Activity)',
         description: 'Unusual Market Activity reports — stocks flagged for suspicious trading patterns.',
         security,
         responses: {
@@ -136,22 +148,24 @@ export function newsRoutes(
       },
     })
 
-    .get('/suspension', async () => {
-      try {
-        const cached = newsCache.get('/news/suspension');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await suspension.getSuspension();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        newsCache.set('/news/suspension', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/suspension', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey: '/news/suspension',
+        ttlMs: NEWS_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => suspension.getSuspension(),
+      });
+      set.headers['Cache-Control'] = `max-age=${NEWS_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['News'],
-        summary: 'Stock suspensions',
+        tags: ['News'], summary: 'Stock suspensions',
         description: 'Recent stock suspension notices from IDX.',
         security,
         responses: {
@@ -161,22 +175,24 @@ export function newsRoutes(
       },
     })
 
-    .get('/etd', async () => {
-      try {
-        const cached = newsCache.get('/news/etd');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await etdTd.getEtd();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        newsCache.set('/news/etd', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/etd', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey: '/news/etd',
+        ttlMs: NEWS_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => etdTd.getEtd(),
+      });
+      set.headers['Cache-Control'] = `max-age=${NEWS_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['News'],
-        summary: 'ETD news',
+        tags: ['News'], summary: 'ETD news',
         description: 'Exchange Traded Derivatives news and updates.',
         security,
         responses: {
@@ -186,22 +202,24 @@ export function newsRoutes(
       },
     })
 
-    .get('/td', async () => {
-      try {
-        const cached = newsCache.get('/news/td');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await etdTd.getTd();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        newsCache.set('/news/td', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/td', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey: '/news/td',
+        ttlMs: NEWS_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => etdTd.getTd(),
+      });
+      set.headers['Cache-Control'] = `max-age=${NEWS_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['News'],
-        summary: 'TD (Trading Derivative) news',
+        tags: ['News'], summary: 'TD (Trading Derivative) news',
         description: 'Trading Derivative product news and notices.',
         security,
         responses: {
@@ -211,22 +229,24 @@ export function newsRoutes(
       },
     })
 
-    .get('/trading-holiday', async () => {
-      try {
-        const cached = newsCache.get('/news/trading-holiday');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await holiday.getTradingHoliday();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        newsCache.set('/news/trading-holiday', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/trading-holiday', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey: '/news/trading-holiday',
+        ttlMs: NEWS_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => holiday.getTradingHoliday(),
+      });
+      set.headers['Cache-Control'] = `max-age=${NEWS_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['News'],
-        summary: 'Trading holidays',
+        tags: ['News'], summary: 'Trading holidays',
         description: 'IDX trading holiday calendar — dates when the exchange is closed.',
         security,
         responses: {

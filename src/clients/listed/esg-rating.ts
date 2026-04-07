@@ -1,7 +1,7 @@
 // Listed Client — ESG Rating
 // Scrape from https://www.idx.co.id/en/listed-companies/esg/
 
-import { createPage } from '../../utils/browser';
+import { browserManager } from '../../utils/browser';
 import { logger } from '../../utils/logger';
 
 export interface EsgRatingItem {
@@ -15,7 +15,7 @@ export class EsgRatingClient {
   async getEsgRatings(): Promise<EsgRatingItem[]> {
     logger.info('Fetching ESG ratings...');
 
-    const page = await createPage();
+    const page = await browserManager.acquirePage();
     try {
       await page.goto('https://www.idx.co.id/en/listed-companies/esg/', {
         waitUntil: 'networkidle',
@@ -99,7 +99,7 @@ export class EsgRatingClient {
       logger.error('ESG fetch failed', { error: msg });
       throw err;
     } finally {
-      await page.close().catch(() => {});
+      await browserManager.releasePage(page);
     }
   }
 }

@@ -5,6 +5,10 @@ import { Elysia, t } from 'elysia';
 import type { DisclosureClient } from '../../clients/disclosure-client';
 import { enrichAnnouncementFiles } from '../../utils/response';
 import { newsCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const DISCLOSURE_TTL_MS = 300_000;
+const DISCLOSURE_MAX_AGE = 300;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -20,7 +24,7 @@ function parseIdxDate(dateStr: string): Date | null {
     'Juli':'07','Agustus':'08','September':'09','Oktober':'10','November':'11','Desember':'12'
   };
   const m = dateStr.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
-  if (m && months[m[2]]) return new Date(`${m[3]}-${months[m[2]]}-${m[1].padStart(2,'0')}`);
+  if (m && m[1] && m[2] && m[3] && months[m[2]]) return new Date(`${m[3]}-${months[m[2]]}-${m[1].padStart(2,'0')}`);
   const d = new Date(dateStr);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -72,30 +76,34 @@ export function announcementsRoutes(
     })
 
     // ── Berita Pengumuman ────────────────────────
-    .get('/berita-pengumuman', async ({ query }) => {
+    .get('/berita-pengumuman', async ({ query, set }) => {
       const cacheKey = `/berita-pengumuman-${query.limit || 20}-${query.page || 1}-${query.keywords || ''}-${query.dateFrom || ''}-${query.dateTo || ''}`;
-      const cached = newsCache.get(cacheKey);
-      if (cached) return { ...cached, _cached: true };
 
-      const result = await disclosure.getBeritaPengumuman(
-        query.limit, query.page, query.keywords,
-      );
-
-      let enriched = enrichAnnouncementFiles(result.items);
-      enriched = filterByDate(enriched, query.dateFrom, query.dateTo);
-
-      const response = {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey,
+        ttlMs: DISCLOSURE_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: async () => {
+          const result = await disclosure.getBeritaPengumuman(
+            query.limit, query.page, query.keywords,
+          );
+          let enriched = enrichAnnouncementFiles(result.items);
+          enriched = filterByDate(enriched, query.dateFrom, query.dateTo);
+          return { items: enriched, total: enriched.length, page: query.page || 1, pageSize: result.pageSize };
+        },
+      });
+      set.headers['Cache-Control'] = `max-age=${DISCLOSURE_MAX_AGE}`;
+      return {
         success: true,
-        data: enriched,
-        total: enriched.length,
-        page: query.page || 1,
-        pageSize: result.pageSize,
+        data: data.items,
+        total: data.total,
+        page: data.page,
+        pageSize: data.pageSize,
         fetchedAt: new Date().toISOString(),
         _source: 'https://www.idx.co.id/id/berita/pengumuman/',
-        _cached: false,
+        _cached: cached,
       };
-      newsCache.set(cacheKey, response);
-      return response;
     }, {
       query: t.Object({
         limit: t.Optional(t.Numeric({ default: 20, minimum: 1, maximum: 200 })),
@@ -117,31 +125,36 @@ export function announcementsRoutes(
           { name: 'dateTo', in: 'query', schema: { type: 'string', description: 'Filter to date (YYYY-MM-DD)' } },
         ],
         responses: {
-          200: { description: 'Announcement list' },
+          200: { description: 'Announcement list', content: { 'application/json': { example: { success: true, data: [{ title: 'Pengumuman Dividen', date: '01 Januari 2025', stockCode: 'BBRI', files: [] }], total: 20, page: 1, pageSize: 20, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
       },
     })
 
     // ── Announcements (Pengumuman) ───────────────
-    .get('/announcements', async ({ query }) => {
+    .get('/announcements', async ({ query, set }) => {
       const cacheKey = `/announcements-${query.limit || 50}-${query.dateFrom || ''}-${query.dateTo || ''}`;
-      const cached = newsCache.get(cacheKey);
-      if (cached) return { ...cached, _cached: true };
 
-      const data = await disclosure.getAnnouncements(query.limit);
-      let enriched = enrichAnnouncementFiles(data);
-      enriched = filterByDate(enriched, query.dateFrom, query.dateTo);
-
-      const response = {
+      const { data, cached } = await cachedScrape({
+        cache: newsCache,
+        cacheKey,
+        ttlMs: DISCLOSURE_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: async () => {
+          const raw = await disclosure.getAnnouncements(query.limit);
+          let enriched = enrichAnnouncementFiles(raw);
+          enriched = filterByDate(enriched, query.dateFrom, query.dateTo);
+          return { items: enriched, total: enriched.length };
+        },
+      });
+      set.headers['Cache-Control'] = `max-age=${DISCLOSURE_MAX_AGE}`;
+      return {
         success: true,
-        data: enriched,
-        total: enriched.length,
+        data: data.items,
+        total: data.total,
         fetchedAt: new Date().toISOString(),
-        _cached: false,
+        _cached: cached,
       };
-      newsCache.set(cacheKey, response);
-      return response;
     }, {
       query: t.Object({
         limit: t.Optional(t.Numeric({ default: 50, minimum: 1, maximum: 200 })),
@@ -159,7 +172,7 @@ export function announcementsRoutes(
           { name: 'dateTo', in: 'query', schema: { type: 'string', description: 'Filter to date (YYYY-MM-DD)' } },
         ],
         responses: {
-          200: { description: 'Announcements list' },
+          200: { description: 'Announcements list', content: { 'application/json': { example: { success: true, data: [{ title: 'Laporan Keuangan Tahunan', date: '01 Januari 2025', stockCode: 'TLKM', files: [] }], total: 50, fetchedAt: '2025-01-01T00:00:00.000Z', _cached: false } } } },
           ...errResponses,
         },
       },

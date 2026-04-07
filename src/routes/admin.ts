@@ -53,7 +53,7 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
     }
 
     try {
-      const key = generateKey({
+      const key = await generateKey({
         name: body.name,
         tier: body.tier as TierName,
         email: body.email,
@@ -102,13 +102,13 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
   })
 
   // ── List all keys ─────────────────────────────
-  .get('/keys', ({ request, set }) => {
+  .get('/keys', async ({ request, set }) => {
     if (!checkAdmin(request)) {
       set.status = 401;
       return { success: false, error: 'Invalid admin key', statusCode: 401 };
     }
 
-    const keys = listKeys();
+    const keys = await listKeys();
     return { success: true, data: keys };
   }, {
     detail: {
@@ -124,13 +124,13 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
   })
 
   // ── Get key detail ────────────────────────────
-  .get('/keys/:id', ({ request, params, set }) => {
+  .get('/keys/:id', async ({ request, params, set }) => {
     if (!checkAdmin(request)) {
       set.status = 401;
       return { success: false, error: 'Invalid admin key', statusCode: 401 };
     }
 
-    const key = getKey(params.id);
+    const key = await getKey(params.id);
     if (!key) {
       set.status = 404;
       return { success: false, error: 'Key not found', statusCode: 404 };
@@ -155,7 +155,7 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
   })
 
   // ── Update key ────────────────────────────────
-  .patch('/keys/:id', ({ request, params, body, set }) => {
+  .patch('/keys/:id', async ({ request, params, body, set }) => {
     if (!checkAdmin(request)) {
       set.status = 401;
       return { success: false, error: 'Invalid admin key', statusCode: 401 };
@@ -178,7 +178,7 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       return { success: false, error: 'Invalid tier', statusCode: 400 };
     }
 
-    const result = updateKey(params.id, updates);
+    const result = await updateKey(params.id, updates);
     if (!result) {
       set.status = 404;
       return { success: false, error: 'Key not found', statusCode: 404 };
@@ -213,13 +213,13 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
   })
 
   // ── Delete key ────────────────────────────────
-  .delete('/keys/:id', ({ request, params, set }) => {
+  .delete('/keys/:id', async ({ request, params, set }) => {
     if (!checkAdmin(request)) {
       set.status = 401;
       return { success: false, error: 'Invalid admin key', statusCode: 401 };
     }
 
-    const ok = deleteKey(params.id);
+    const ok = await deleteKey(params.id);
     if (!ok) {
       set.status = 404;
       return { success: false, error: 'Key not found', statusCode: 404 };
@@ -246,13 +246,13 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
   })
 
   // ── Usage stats ───────────────────────────────
-  .get('/stats', ({ request, set }) => {
+  .get('/stats', async ({ request, set }) => {
     if (!checkAdmin(request)) {
       set.status = 401;
       return { success: false, error: 'Invalid admin key', statusCode: 401 };
     }
 
-    const stats = getStats();
+    const stats = await getStats();
     return { success: true, data: stats };
   }, {
     detail: {

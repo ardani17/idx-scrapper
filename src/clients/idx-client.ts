@@ -1,6 +1,6 @@
 // IDX Data Client — Relisting, Emiten, Company Profile
 
-import { createPage } from '../utils/browser';
+import { browserManager } from '../utils/browser';
 import type { CompanyProfile, EmitenItem, RelistingData } from '../types';
 import { DEFAULT_CONFIG } from '../types';
 
@@ -14,7 +14,7 @@ export class IDXClient {
   }
 
   async getRelistingData(pageSize = 10, indexFrom = 0): Promise<RelistingData[]> {
-    const page = await createPage();
+    const page = await browserManager.acquirePage();
     try {
       const url = `${this.baseUrl}/primary/Home/GetRelistingData?pageSize=${pageSize}&indexFrom=${indexFrom}`;
       const resp = await page.goto(url, { timeout: this.timeout });
@@ -33,12 +33,12 @@ export class IDXClient {
         sahamIPOValue: item.SahamIPOValue || 0,
       }));
     } finally {
-      await page.close();
+      await browserManager.releasePage(page);
     }
   }
 
   async getCompanyProfile(code: string): Promise<CompanyProfile | null> {
-    const page = await createPage();
+    const page = await browserManager.acquirePage();
     try {
       console.log(`[IDX] Scraping profile: ${code}`);
       await page.goto(
@@ -107,12 +107,12 @@ export class IDXClient {
         ownership: raw.ownership, subsidiaries: raw.subsidiaries,
       };
     } finally {
-      await page.close();
+      await browserManager.releasePage(page);
     }
   }
 
   async getEmitenList(pageNum = 1): Promise<EmitenItem[]> {
-    const page = await createPage();
+    const page = await browserManager.acquirePage();
     try {
       await page.goto(
         `${this.baseUrl}/id/perusahaan-tercatat/profil-perusahaan-tercatat/`,
@@ -140,7 +140,7 @@ export class IDXClient {
         return items;
       });
     } finally {
-      await page.close();
+      await browserManager.releasePage(page);
     }
   }
 }

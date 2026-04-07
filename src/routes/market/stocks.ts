@@ -8,9 +8,13 @@
 // GET /api/market/suspend
 
 import { Elysia } from 'elysia';
-import type { StockSummaryClient, TopMoverType } from '../../clients/market/stock-summary';
+import type { StockSummaryClient } from '../../clients/market/stock-summary';
 import type { SuspendDataClient } from '../../clients/market/suspend-data';
 import { marketCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const MARKET_TTL_MS = 30_000;
+const MARKET_MAX_AGE = 30;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -26,30 +30,24 @@ export function stocksRoutes(
   return new Elysia()
 
     // ── Stock Summary (Semua Saham) ─────────────
-    .get('/stock-summary', async () => {
-      try {
-        const cached = marketCache.get('/stock-summary');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await stock.getStockSummary();
-        const result = {
-          success: true,
-          data,
-          total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/stock-summary', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/stock-summary', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/stock-summary',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => stock.getStockSummary(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['Market'],
-        summary: 'Stock summary',
+        tags: ['Market'], summary: 'Stock summary',
         description: 'Complete list of all traded stocks with current price, change, volume, value, and frequency.',
         security,
         responses: {
@@ -60,29 +58,24 @@ export function stocksRoutes(
     })
 
     // ── Top Gainer ───────────────────────────────
-    .get('/top-gainer', async () => {
-      try {
-        const cached = marketCache.get('/top-gainer');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await stock.getTopMover('TopGainer');
-        const result = {
-          success: true,
-          data,
-          total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/top-gainer', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/top-gainer', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/top-gainer',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => stock.getTopMover('TopGainer'),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['Market'],
-        summary: 'Top gainers',
+        tags: ['Market'], summary: 'Top gainers',
         description: 'Stocks with the highest price increase today, sorted by percentage gain.',
         security,
         responses: {
@@ -93,29 +86,24 @@ export function stocksRoutes(
     })
 
     // ── Top Loser ────────────────────────────────
-    .get('/top-loser', async () => {
-      try {
-        const cached = marketCache.get('/top-loser');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await stock.getTopMover('TopLoser');
-        const result = {
-          success: true,
-          data,
-          total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/top-loser', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/top-loser', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/top-loser',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => stock.getTopMover('TopLoser'),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['Market'],
-        summary: 'Top losers',
+        tags: ['Market'], summary: 'Top losers',
         description: 'Stocks with the highest price decrease today, sorted by percentage drop.',
         security,
         responses: {
@@ -126,29 +114,24 @@ export function stocksRoutes(
     })
 
     // ── Top Volume ───────────────────────────────
-    .get('/top-volume', async () => {
-      try {
-        const cached = marketCache.get('/top-volume');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await stock.getTopMover('TopVolume');
-        const result = {
-          success: true,
-          data,
-          total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/top-volume', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/top-volume', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/top-volume',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => stock.getTopMover('TopVolume'),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['Market'],
-        summary: 'Top volume',
+        tags: ['Market'], summary: 'Top volume',
         description: 'Most actively traded stocks by volume (number of shares).',
         security,
         responses: {
@@ -159,29 +142,24 @@ export function stocksRoutes(
     })
 
     // ── Top Value ────────────────────────────────
-    .get('/top-value', async () => {
-      try {
-        const cached = marketCache.get('/top-value');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await stock.getTopMover('TopValue');
-        const result = {
-          success: true,
-          data,
-          total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/top-value', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/top-value', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/top-value',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => stock.getTopMover('TopValue'),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['Market'],
-        summary: 'Top value',
+        tags: ['Market'], summary: 'Top value',
         description: 'Most actively traded stocks by transaction value (in IDR).',
         security,
         responses: {
@@ -192,29 +170,24 @@ export function stocksRoutes(
     })
 
     // ── Top Frequent ─────────────────────────────
-    .get('/top-frequent', async () => {
-      try {
-        const cached = marketCache.get('/top-frequent');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await stock.getTopMover('TopFrequent');
-        const result = {
-          success: true,
-          data,
-          total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/top-frequent', result);
-        return result;
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
-      }
+    .get('/top-frequent', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/top-frequent',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => stock.getTopMover('TopFrequent'),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['Market'],
-        summary: 'Top frequent',
+        tags: ['Market'], summary: 'Top frequent',
         description: 'Most frequently traded stocks by number of transactions.',
         security,
         responses: {
@@ -225,30 +198,24 @@ export function stocksRoutes(
     })
 
     // ── Suspend Data ─────────────────────────────
-    .get('/suspend', async () => {
-      try {
-        const cached = marketCache.get('/suspend');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await suspend.getSuspendData();
-        const result = {
-          success: true,
-          data,
-          total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/',
-          _cached: false,
-        };
-        marketCache.set('/suspend', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/suspend', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: marketCache,
+        cacheKey: '/suspend',
+        ttlMs: MARKET_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => suspend.getSuspendData(),
+      });
+      set.headers['Cache-Control'] = `max-age=${MARKET_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
-        tags: ['Market'],
-        summary: 'Suspended stocks',
+        tags: ['Market'], summary: 'Suspended stocks',
         description: 'List of currently suspended stocks with suspension reason and date.',
         security,
         responses: {

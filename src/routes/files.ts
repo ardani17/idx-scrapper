@@ -99,13 +99,15 @@ export function fileRoutes(downloader: FileDownloader) {
       detail: {
         tags: ['Files'],
         summary: 'Delete a file',
-        description: 'Delete a file or folder from the server storage.',
-        security,
+        description: 'Delete a file or folder from the server storage. Requires X-Admin-Key header.',
+        security: securityAdmin,
         parameters: [
           { name: 'path', in: 'query', required: true, schema: { type: 'string' }, description: 'Relative path to delete' },
         ],
         responses: {
           200: { description: 'File deleted', content: { 'application/json': { example: { success: true, message: 'Deleted: folder/file.pdf' } } } },
+          400: { description: 'Invalid path or file not found' },
+          401: { description: 'Admin key required' },
           ...errResponses,
         },
       },

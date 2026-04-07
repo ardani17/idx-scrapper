@@ -1,7 +1,7 @@
 // Financial Reports Client — Laporan Keuangan IDX
 // Dipisah dari disclosure-client.ts untuk maintainability
 
-import { createPage } from '../utils/browser';
+import { browserManager } from '../utils/browser';
 import type { FinancialReport, ReportType } from '../types';
 import { DEFAULT_CONFIG } from '../types';
 import { logger } from '../utils/logger';
@@ -28,7 +28,7 @@ export class FinancialReportsClient {
     sortByDate?: boolean;
     periode?: string;
   } = {}): Promise<{ results: FinancialReport[]; totalCount: number }> {
-    const page = await createPage();
+    const page = await browserManager.acquirePage();
     try {
       const {
         reportType = 'ra', year = new Date().getFullYear(),
@@ -73,7 +73,7 @@ export class FinancialReportsClient {
 
       return { results, totalCount: data.ResultCount || 0 };
     } finally {
-      await page.close();
+      await browserManager.releasePage(page);
     }
   }
 

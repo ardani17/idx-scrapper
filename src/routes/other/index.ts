@@ -10,6 +10,10 @@ import { NewListingClient } from '../../clients/other/new-listing';
 import { FactSheetLQ45Client } from '../../clients/other/fact-sheet-lq45';
 import { BondBookClient } from '../../clients/other/bond-book';
 import { slowCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const SLOW_TTL_MS = 900_000;
+const SLOW_MAX_AGE = 900;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -26,19 +30,21 @@ export function otherRoutes() {
 
   return new Elysia({ prefix: '/other' })
 
-    .get('/statistics', async () => {
-      try {
-        const cached = slowCache.get('/other/statistics');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await stats.getStatistics();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        slowCache.set('/other/statistics', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/statistics', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/other/statistics',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => stats.getStatistics(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Other'],
@@ -52,19 +58,21 @@ export function otherRoutes() {
       },
     })
 
-    .get('/new-listing', async () => {
-      try {
-        const cached = slowCache.get('/other/new-listing');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await newListing.getNewListings();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        slowCache.set('/other/new-listing', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/new-listing', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/other/new-listing',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => newListing.getNewListings(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Other'],
@@ -78,19 +86,21 @@ export function otherRoutes() {
       },
     })
 
-    .get('/fact-sheet-lq45', async () => {
-      try {
-        const cached = slowCache.get('/other/fact-sheet-lq45');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await factSheet.getFactSheet();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        slowCache.set('/other/fact-sheet-lq45', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/fact-sheet-lq45', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/other/fact-sheet-lq45',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => factSheet.getFactSheet(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Other'],
@@ -104,19 +114,21 @@ export function otherRoutes() {
       },
     })
 
-    .get('/bond-book', async () => {
-      try {
-        const cached = slowCache.get('/other/bond-book');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await bondBook.getBondBook();
-        const result = { success: true, data, total: data.length, fetchedAt: new Date().toISOString(), _source: 'https://www.idx.co.id/', _cached: false };
-        slowCache.set('/other/bond-book', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/bond-book', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/other/bond-book',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => bondBook.getBondBook(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Other'],

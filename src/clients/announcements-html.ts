@@ -1,7 +1,7 @@
 // Legacy HTML Scraper — Fallback for announcements when API fails
 // Dipisah dari announcements.ts untuk menjaga file size < 150 baris
 
-import { createPage } from '../utils/browser';
+import { browserManager } from '../utils/browser';
 import type { Announcement } from '../types';
 import { DEFAULT_CONFIG } from '../types';
 
@@ -13,7 +13,7 @@ export async function scrapeAnnouncementsHTML(
   baseUrl: string = DEFAULT_CONFIG.idxBaseUrl,
   max = 50,
 ): Promise<Announcement[]> {
-  const page = await createPage();
+  const page = await browserManager.acquirePage();
   try {
     console.log('[Announcements] Scraping (HTML fallback)...');
     await page.goto(`${baseUrl}/id/perusahaan-tercatat/keterbukaan-informasi/`, {
@@ -63,6 +63,6 @@ export async function scrapeAnnouncementsHTML(
     console.log(`[Announcements] HTML scrape returned ${items.length} items`);
     return items.slice(0, max);
   } finally {
-    await page.close();
+    await browserManager.releasePage(page);
   }
 }

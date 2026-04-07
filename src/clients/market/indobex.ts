@@ -1,7 +1,7 @@
 // Market Client — INDOBeX (Bond Index via HTML scrape)
 // https://www.idx.co.id/en/market-data/bond-data/indobex/
 
-import { createPage } from '../../utils/browser';
+import { browserManager } from '../../utils/browser';
 import { logger } from '../../utils/logger';
 
 export interface IndobexItem {
@@ -15,7 +15,7 @@ export class IndobexClient {
   async getIndobex(): Promise<IndobexItem[]> {
     logger.info('Fetching INDOBeX bond index data...');
 
-    const page = await createPage();
+    const page = await browserManager.acquirePage();
     try {
       await page.goto('https://www.idx.co.id/en/market-data/bond-data/indobex/', {
         waitUntil: 'networkidle',
@@ -96,7 +96,7 @@ export class IndobexClient {
       logger.error('INDOBeX fetch failed', { error: msg });
       throw err;
     } finally {
-      await page.close().catch(() => {});
+      await browserManager.releasePage(page);
     }
   }
 }

@@ -1,52 +1,17 @@
-// File Downloader — Download IDX attachments via XHR inside Playwright
+// File Downloader — Download IDX attachments via XHR inside Playwright (shared BrowserManager)
 
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { type Page } from 'playwright';
 import { promises as fs } from 'fs';
 import { join, basename } from 'path';
+import { browserManager } from '../utils/browser';
+import { logger } from '../utils/logger';
 
 export class FileDownloader {
-  private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
-  private page: Page | null = null;
   private storageDir: string;
   private readonly baseUrl = 'https://www.idx.co.id';
 
   constructor(storageDir: string) {
     this.storageDir = storageDir;
-  }
-
-  // ── Page management (reuse single page) ────────
-
-  private async getPage(): Promise<Page> {
-    if (this.page) {
-      try {
-        if (this.page.url().includes('idx.co.id')) return this.page;
-      } catch {}
-    }
-    return this.initPage();
-  }
-
-  private async initPage(): Promise<Page> {
-    await this.close();
-
-    this.browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-devshm-usage', '--disable-gpu'],
-    });
-
-    this.context = await this.browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      viewport: { width: 1920, height: 1080 },
-      locale: 'id-ID',
-      timezoneId: 'Asia/Jakarta',
-    });
-
-    this.page = await this.context.newPage();
-    console.log('[Downloader] Loading idx.co.id...');
-    await this.page.goto(this.baseUrl, { waitUntil: 'networkidle', timeout: 60000 });
-    await this.page.waitForTimeout(5000);
-    console.log('[Downloader] Page ready ✓');
-    return this.page;
   }
 
   // ── Download via XHR (Cloudflare cookies included) ──
@@ -64,15 +29,21 @@ export class FileDownloader {
     try {
       const stat = await fs.stat(localPath);
       if (stat.size > 0) {
-        console.log(`[Downloader] ⏭️ ${fileName} (exists)`);
+        logger.debug('File already exists, skipping', { fileName });
         return { success: true, localPath, fileName, sizeBytes: stat.size };
       }
     } catch {}
 
-    const page = await this.getPage();
-
+    let page: Page | null = null;
     try {
-      console.log(`[Downloader] ⬇️ ${fileName}...`);
+      page = await browserManager.acquirePage();
+
+      // Navigate to IDX to pick up Cloudflare cookies
+      logger.info('Navigating to idx.co.id for cookies', { fileName });
+      await page.goto(this.baseUrl, { waitUntil: 'networkidle', timeout: 60000 });
+      await page.waitForTimeout(5000);
+
+      logger.info('Downloading file', { fileName, url: fullUrl });
 
       const result = await page.evaluate(async (url: string) => {
         return new Promise<{ ok: boolean; status: number; body: string; size: number }>(resolve => {
@@ -100,20 +71,22 @@ export class FileDownloader {
       }, fullUrl);
 
       if (!result.ok || result.size === 0) {
-        console.log(`[Downloader] ❌ ${fileName}: HTTP ${result.status}`);
-        if (result.status === 403) this.page = null; // reset for fresh cookies
+        logger.warn('Download failed', { fileName, httpStatus: result.status });
         return { success: false, localPath: null, fileName, sizeBytes: 0, error: `HTTP ${result.status}` };
       }
 
       const buffer = Buffer.from(result.body, 'base64');
       await fs.writeFile(localPath, buffer);
-      console.log(`[Downloader] ✅ ${fileName} (${(buffer.length / 1024).toFixed(1)} KB)`);
+      logger.info('Download complete', { fileName, sizeKB: (buffer.length / 1024).toFixed(1) });
       return { success: true, localPath, fileName, sizeBytes: buffer.length };
 
     } catch (error: any) {
-      console.log(`[Downloader] ❌ ${fileName}: ${error.message}`);
-      this.page = null;
+      logger.error('Download error', { fileName, error: error.message });
       return { success: false, localPath: null, fileName, sizeBytes: 0, error: error.message };
+    } finally {
+      if (page) {
+        await browserManager.releasePage(page);
+      }
     }
   }
 
@@ -141,7 +114,11 @@ export class FileDownloader {
 
     const ok = results.filter(r => r.success);
     const fail = results.filter(r => !r.success);
-    console.log(`[Downloader] 📁 ${dateSlug}/${stockCode || 'GENERAL'}: ${ok.length} OK, ${fail.length} failed`);
+    logger.info('Batch download summary', {
+      folder: `${dateSlug}/${stockCode || 'GENERAL'}`,
+      downloaded: ok.length,
+      failed: fail.length,
+    });
 
     return {
       folder: `${dateSlug}/${stockCode || 'GENERAL'}`,
@@ -203,14 +180,7 @@ export class FileDownloader {
     return this.storageDir;
   }
 
-  private async close() {
-    try { if (this.page) await this.page.close(); } catch {}
-    try { if (this.context) await this.context.close(); } catch {}
-    try { if (this.browser) await this.browser.close(); } catch {}
-    this.page = null;
-    this.context = null;
-    this.browser = null;
+  async destroy(): Promise<void> {
+    // Browser lifecycle is now managed by BrowserManager singleton — nothing to clean up here
   }
-
-  async destroy() { await this.close(); }
 }

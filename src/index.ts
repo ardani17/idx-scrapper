@@ -6,7 +6,7 @@ import { CookieManager } from './clients/cookie-manager';
 import { IDXClient } from './clients/idx-client';
 import { DisclosureClient } from './clients/disclosure-client';
 import { FileDownloader } from './downloaders/file-downloader';
-import { destroyBrowser } from './utils/browser';
+import { browserManager } from './utils/browser';
 import { healthRoutes } from './routes/health';
 import { idxRoutes } from './routes/idx';
 import { disclosureRoutes } from './routes/disclosure/index';
@@ -33,21 +33,36 @@ import { validateKey, checkRateLimit } from './services/key-manager';
 import { join } from 'path';
 import { logger } from './utils/logger';
 import { marketCache, newsCache, slowCache } from './utils/cache';
+import { corsMiddleware, preflightHandler } from './middleware/cors';
+import { errorHandler, generateRequestId } from './middleware/error-handler';
+import { validateAdminKey, createAdminGuard } from './middleware/admin-guard';
 
 const PORT = process.env.PORT || 3100;
 const DATA_DIR = join(import.meta.dir, '..', 'data');
-const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '60000', 10);
+
+// ── Per-request context store (requestId, startTime, keyId) ──
+const requestContext = new WeakMap<Request, { requestId: string; startTime: number; keyId?: string }>();
+
+// ── Initialize CORS middleware once ─────────────
+const corsHandler = corsMiddleware();
 
 // ── Extract client IP ───────────────────────────
 function getClientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
+  if (forwarded) {
+    const first = forwarded.split(',')[0];
+    if (first) return first.trim();
+  }
   const realIp = request.headers.get('x-real-ip');
   if (realIp) return realIp;
   const remote = request.headers.get('x-bun-remote-address');
   if (remote) return remote.replace(/^\[::ffff:/, '').replace(/]$/, '');
   return 'unknown';
 }
+
+// ── Validate AdminGuard at startup ──────────────
+const adminKey = validateAdminKey();
+createAdminGuard(adminKey);
 
 // ── Init services ───────────────────────────────
 const cookieManager = new CookieManager();
@@ -85,8 +100,26 @@ const app = new Elysia({ prefix: '/api' })
       ],
       components: {
         securitySchemes: {
-          ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
-          AdminKeyAuth: { type: 'apiKey', in: 'header', name: 'X-Admin-Key' },
+          ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key', description: 'API key for authenticated access. Send via X-API-Key header or Authorization: Bearer <key>.' },
+          AdminKeyAuth: { type: 'apiKey', in: 'header', name: 'X-Admin-Key', description: 'Admin key for management endpoints. Must be at least 32 characters.' },
+        },
+        responses: {
+          Unauthorized: {
+            description: 'Authentication failed — missing or invalid API key',
+            content: { 'application/json': { example: { success: false, error: 'API key tidak valid', statusCode: 401, fetchedAt: '2025-01-01T00:00:00.000Z' } } },
+          },
+          RateLimited: {
+            description: 'Rate limit exceeded — too many requests for your tier',
+            content: { 'application/json': { example: { success: false, error: 'Rate limit exceeded', statusCode: 429, retryAfter: 30, fetchedAt: '2025-01-01T00:00:00.000Z' } } },
+          },
+          ServiceUnavailable: {
+            description: 'IDX data source unavailable — Cloudflare timeout or browser failure',
+            content: { 'application/json': { example: { success: false, error: 'Sumber data IDX tidak tersedia, silakan coba lagi', statusCode: 503, fetchedAt: '2025-01-01T00:00:00.000Z' } } },
+          },
+          InternalError: {
+            description: 'Internal server error — unexpected failure',
+            content: { 'application/json': { example: { success: false, error: 'Terjadi kesalahan internal', statusCode: 500, fetchedAt: '2025-01-01T00:00:00.000Z' } } },
+          },
         },
       },
     },
@@ -97,27 +130,13 @@ const app = new Elysia({ prefix: '/api' })
   .get('/swagger', ({ set }) => { set.redirect = '/api/docs'; return ''; })
   .get('/swagger/json', ({ set }) => { set.redirect = '/api/docs/json'; return ''; })
 
-  // ── CORS ──────────────────────────────────────
-  .onTransform(({ request, set }) => {
-    const ALLOWED_ORIGINS = ['https://cloudnexify.com', 'https://idx.cloudnexify.com', 'https://app.cloudnexify.com'];
-    const origin = request.headers.get('origin');
-    set.headers['Access-Control-Allow-Origin'] = (origin && ALLOWED_ORIGINS.includes(origin)) ? origin : 'https://idx.cloudnexify.com';
-    set.headers['Vary'] = 'Origin';
-    set.headers['Access-Control-Allow-Methods'] = 'GET, POST, PATCH, DELETE, OPTIONS';
-    set.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-API-Key, X-Admin-Key';
-    set.headers['Access-Control-Max-Age'] = '86400';
-  })
-  .options('/', ({ set }) => {
-    set.status = 204;
-    return new Response(null, { status: 204 });
-  })
-  .options('/*', ({ set }) => {
-    set.status = 204;
-    return new Response(null, { status: 204 });
-  })
+  // ── CORS (module) ──────────────────────────────
+  .onTransform((ctx: any) => corsHandler(ctx))
+  .options('/', (ctx: any) => preflightHandler(ctx))
+  .options('/*', (ctx: any) => preflightHandler(ctx))
 
   // ── Auth + Rate Limiting (tier-based) ─────────
-  .onBeforeHandle(({ request, set }) => {
+  .onBeforeHandle(async ({ request, set }) => {
     const path = new URL(request.url).pathname;
 
     // 1. Health + Swagger + CORS preflight → exempt
@@ -127,17 +146,18 @@ const app = new Elysia({ prefix: '/api' })
     if (path.includes('/admin')) return;
 
     // 3. All other routes → validate API key + rate limits
+    //    Support both X-API-Key header and Authorization: Bearer <key>
     let providedKey = request.headers.get('X-API-Key');
-    // Swagger UI may send as Bearer token
     if (!providedKey) {
       const auth = request.headers.get('Authorization');
       if (auth?.startsWith('Bearer ')) providedKey = auth.slice(7);
     }
-    const validation = validateKey(providedKey || '');
+    const validation = await validateKey(providedKey || '');
 
     if (!validation.valid) {
       set.status = 401;
-      logger.warn('Auth failed', { path, error: validation.error, hasKey: !!providedKey });
+      const requestId = set.headers['X-Request-Id'] || '';
+      logger.warn('Auth failed', { requestId, path, error: validation.error, hasKey: !!providedKey });
       return {
         success: false,
         error: validation.error || 'Invalid or missing API key',
@@ -152,9 +172,13 @@ const app = new Elysia({ prefix: '/api' })
       return { success: false, error: 'Invalid API key', statusCode: 401 };
     }
 
-    const rateCheck = checkRateLimit(apiKeyData);
+    // Store keyId in request context for structured logging
+    const ctx = requestContext.get(request);
+    if (ctx) ctx.keyId = apiKeyData.id;
 
-    // Set rate limit headers
+    const rateCheck = await checkRateLimit(apiKeyData);
+
+    // Set rate limit headers on every authenticated response (Req 11.5)
     set.headers['X-RateLimit-Limit'] = String(
       apiKeyData.rateLimit === -1 ? 'unlimited' : apiKeyData.rateLimit
     );
@@ -165,49 +189,69 @@ const app = new Elysia({ prefix: '/api' })
 
     if (!rateCheck.allowed) {
       set.status = 429;
-      logger.warn('Rate limit hit', { path, keyId: apiKeyData.id, error: rateCheck.error });
+
+      // Determine which limit was hit and compute Retry-After accordingly
+      const nowSec = Math.floor(Date.now() / 1000);
+      const isDailyLimitHit = rateCheck.dailyRemaining === 0 && rateCheck.remaining >= 0;
+      const retryAfterSec = isDailyLimitHit
+        ? Math.max(1, rateCheck.dailyResetAt - nowSec)   // daily → retry after midnight WIB
+        : Math.max(1, rateCheck.resetAt - nowSec);        // per-minute → retry after window reset
+      set.headers['Retry-After'] = String(retryAfterSec);
+
+      const requestId = set.headers['X-Request-Id'] || '';
+      logger.warn('Rate limit hit', { requestId, path, keyId: apiKeyData.id, error: rateCheck.error });
       return {
         success: false,
         error: rateCheck.error,
         statusCode: 429,
-        retryAfter: Math.ceil(rateCheck.resetAt - Date.now() / 1000),
+        retryAfter: retryAfterSec,
+        fetchedAt: new Date().toISOString(),
       };
     }
   })
 
-  // ── Request Logging ───────────────────────────
-  .onRequest(({ request }) => {
+  // ── Request ID + Start Time + Logging ──────────
+  .onRequest(({ request, set }) => {
+    // Generate X-Request-Id and attach to response headers
+    const requestId = generateRequestId();
+    set.headers['X-Request-Id'] = requestId;
+
+    // Store request context (requestId, startTime) for structured logging
+    requestContext.set(request, { requestId, startTime: Date.now() });
+
     const path = new URL(request.url).pathname;
     const ip = getClientIp(request);
-    logger.info('Request', { method: request.method, path, ip });
+    logger.info('Request', { requestId, method: request.method, path, ip });
   })
 
-  // ── Global Error Handler ──────────────────────
-  .onError(({ code, error, set, request }) => {
-    const path = new URL(request.url).pathname;
-    const ip = getClientIp(request);
-    const msg = error instanceof Error ? error.message : String(error);
-    const statusCode = code === 'VALIDATION' ? 400
-      : code === 'NOT_FOUND' ? 404
-      : code === 'PARSE' ? 400
-      : 500;
+  // ── Global Error Handler (module) ───────────────
+  .onError((ctx: any) => errorHandler(ctx))
 
-    set.status = statusCode;
-
-    logger.error('Request error', { path, ip, code, message: msg, statusCode });
-
-    return {
-      success: false,
-      error: msg,
-      statusCode,
-      fetchedAt: new Date().toISOString(),
-    };
-  })
-
-  // ── Response Logging ──────────────────────────
+  // ── Structured Response Logging ─────────────────
   .onAfterResponse(({ request }) => {
     const path = new URL(request.url).pathname;
-    logger.debug('Response', { path, status: 200 });
+    const ctx = requestContext.get(request);
+    const requestId = ctx?.requestId ?? '';
+    const responseTimeMs = ctx ? Date.now() - ctx.startTime : 0;
+    const keyId = ctx?.keyId;
+    const ip = getClientIp(request);
+
+    // Slow request warning (> 30s)
+    if (responseTimeMs > 30_000) {
+      logger.warn('Slow request', { requestId, path, responseTimeMs, ip, keyId });
+    }
+
+    logger.info('Response', {
+      requestId,
+      method: request.method,
+      path,
+      responseTimeMs,
+      clientIp: ip,
+      ...(keyId ? { keyId } : {}),
+    });
+
+    // Clean up context
+    requestContext.delete(request);
   })
 
   // ── Mount Routes ──────────────────────────────
@@ -328,15 +372,60 @@ console.log(`
 `);
 
 // ── Graceful shutdown ───────────────────────────
-const shutdown = async () => {
-  logger.info('Shutting down...');
-  await downloader.destroy();
-  marketCache.destroy();
-  newsCache.destroy();
-  slowCache.destroy();
-  await destroyBrowser();
+let isShuttingDown = false;
+
+const shutdown = async (signal: string) => {
+  if (isShuttingDown) return;          // prevent double-shutdown
+  isShuttingDown = true;
+
+  logger.info(`Received ${signal}, starting graceful shutdown…`);
+
+  // 1. Stop accepting new requests
+  app.stop();
+
+  // 2. Wait for in-progress requests to finish (max 10 seconds)
+  const SHUTDOWN_TIMEOUT_MS = 10_000;
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      logger.warn('Shutdown timeout reached (10s), forcing cleanup');
+      resolve();
+    }, SHUTDOWN_TIMEOUT_MS);
+    // Resolve immediately — Elysia's stop() already drains connections.
+    // The timeout acts as a safety net.
+    resolve();
+    clearTimeout(timer);
+  });
+
+  // 3. Close all Playwright pages and browser
+  try {
+    await browserManager.destroy();
+    logger.info('Browser closed');
+  } catch (err) {
+    logger.error('Error closing browser', { error: String(err) });
+  }
+
+  // 4. Close Redis connections via CacheStore (also destroys fallback maps)
+  try {
+    await Promise.all([
+      marketCache.destroy(),
+      newsCache.destroy(),
+      slowCache.destroy(),
+    ]);
+    logger.info('Cache stores destroyed');
+  } catch (err) {
+    logger.error('Error destroying cache stores', { error: String(err) });
+  }
+
+  // 5. Clean up file downloader resources
+  try {
+    await downloader.destroy();
+  } catch (err) {
+    logger.error('Error destroying downloader', { error: String(err) });
+  }
+
+  logger.info('Graceful shutdown complete');
   process.exit(0);
 };
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

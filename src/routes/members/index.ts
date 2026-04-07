@@ -6,6 +6,10 @@ import { Elysia } from 'elysia';
 import { BrokerClient } from '../../clients/members/broker';
 import { ParticipantClient } from '../../clients/members/participant';
 import { slowCache } from '../../utils/cache';
+import { cachedScrape } from '../../utils/cached-scrape';
+
+const SLOW_TTL_MS = 900_000;
+const SLOW_MAX_AGE = 900;
 
 const security = [{ ApiKeyAuth: [] }];
 const errResponses = {
@@ -21,23 +25,21 @@ export function membersRoutes() {
   return new Elysia({ prefix: '/members' })
 
     // ── Anggota Bursa (Sekuritas) ────────────────
-    .get('/brokers', async () => {
-      try {
-        const cached = slowCache.get('/members/brokers');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await brokers.getBrokers();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        slowCache.set('/members/brokers', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/brokers', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/members/brokers',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => brokers.getBrokers(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Members'],
@@ -52,23 +54,21 @@ export function membersRoutes() {
     })
 
     // ── Partisipan ───────────────────────────────
-    .get('/participants', async () => {
-      try {
-        const cached = slowCache.get('/members/participants');
-        if (cached) return { ...cached, _cached: true };
-
-        const data = await participants.getParticipants();
-        const result = {
-          success: true, data, total: data.length,
-          fetchedAt: new Date().toISOString(),
-          _source: 'https://www.idx.co.id/', _cached: false,
-        };
-        slowCache.set('/members/participants', result);
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return { success: false, error: msg };
-      }
+    .get('/participants', async ({ set }) => {
+      const { data, cached } = await cachedScrape({
+        cache: slowCache,
+        cacheKey: '/members/participants',
+        ttlMs: SLOW_TTL_MS,
+        requestId: 'no-request-id',
+        scraper: () => participants.getParticipants(),
+      });
+      set.headers['Cache-Control'] = `max-age=${SLOW_MAX_AGE}`;
+      return {
+        success: true, data,
+        total: Array.isArray(data) ? data.length : 0,
+        fetchedAt: new Date().toISOString(),
+        _source: 'https://www.idx.co.id/', _cached: cached,
+      };
     }, {
       detail: {
         tags: ['Members'],
